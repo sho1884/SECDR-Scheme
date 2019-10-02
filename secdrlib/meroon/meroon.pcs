@@ -1,0 +1,107 @@
+;;; $Id: meroon.pcs,v 2.4 1992/09/25 06:06:44 queinnec Exp $
+;;; Copyright (c) 1990, 91, 92 by Christian Queinnec. All rights reserved.
+
+;;;                            *******************************
+;;;                            PC-Scheme Adaptation for Meroon
+;;;                            *******************************
+
+;;; This file contains the necessary adaptation for PC-Scheme to
+;;; interpret Meroon. It is in phase with Meroon V2.
+
+;;; This program is distributed in the hope that it will be useful.
+;;; Use and copying of this software and preparation of derivative works
+;;; based upon this software are permitted, so long as the following
+;;; conditions are met:
+;;;      o credit to the authors is acknowledged following current
+;;;        academic behaviour
+;;;      o no fees or compensation are charged for use, copies, or
+;;;        access to this software
+;;;      o this copyright notice is included intact.
+;;; This software is made available AS IS, and no warranty is made about 
+;;; the software or its performance. 
+
+;;; Bug descriptions, use reports, comments or suggestions are welcome.
+;;; Send them to    
+;;;   <queinnec@polytechnique.fr>   or to:   <Christian.Queinnec@inria.fr>
+;;;                                 or to:
+;;;   Christian Queinnec                     Christian Queinnec
+;;;   Laboratoire d'Informatique de l'X      INRIA -- Rocquencourt
+;;;   Ecole Polytechnique                    Domaine de Voluceau, BP 105
+;;;   91128 Palaiseau                        78153 Le Chesnay Cedex
+;;;   France                                 France
+
+;;;************************************************
+;;;    Small, Efficient and Innovative Class System
+;;;       Christian Queinnec  
+;;;   \'Ecole Polytechnique & INRIA-Rocquencourt
+;;;************************************************
+
+(macro define-oo-macro
+   (lambda (call)  ; call = (define-oo-macro (name vars...) body...)
+     `(macro ,(car (cadr call)) 
+     	     (lambda (call)
+               (apply (lambda ,(cdr (cadr call)) ,@(cddr call))
+                      (cdr call) ) ) ) ) )
+
+(define-oo-macro (unless condition . body)
+  `(if ,condition #f (begin . ,body)) )
+
+(define-oo-macro (when condition . body)
+  `(if ,condition (begin . ,body)) )
+
+;;; PC-Scheme is very touchy with assignment on global variables it 
+;;; never saw before.
+(define-oo-macro (oo-set! name form)
+  `(set! (access ,name user-initial-environment) ,form) )
+
+;;; apply is binary in PC Scheme
+(define-oo-macro (oo-apply fn . args)
+  (define (consify args)
+    (if (pair? (cdr args))
+        `(cons ,(car args) ,(consify (cdr args)))
+        (car args) ) )
+  `(apply ,fn ,(if (pair? args) (consify args) '())) )
+
+(define (oo-concat . names)
+  (string->symbol
+   (apply string-append
+          (map (lambda (thing)
+                    (cond ((symbol? thing) 
+                           (symbol->string thing) )
+                          ((string? thing) thing)
+                          ((number? thing)
+                           (number->string thing) )
+                          (else (error "non coercible to String"
+                                        thing )) ) )
+                  names ) ) ) )
+
+(define (flat l)
+  (define (flatten l r)
+    (cond ((pair? l)
+           (flatten (car l) (flatten (cdr l) r)) )
+          ((null? l) r)
+          (else (cons l r)) ) )
+  (flatten l '()) )
+
+(define (mapcan f l)
+  (if (pair? l)
+      (append (f (car l)) (mapcan f (cdr l)))
+      '() ) )
+
+(define (every? p . args)
+  (let andmap ((args args) (value #t))
+    (if (let any-at-end? ((ls args))
+          (and (pair? ls)
+               (or (not (pair? (car ls)))
+                   (any-at-end? (cdr ls)))))
+        value
+        (let ((value (apply p (map car args))))
+          (and value (andmap (map cdr args) value))))))
+
+(define remove delete!)
+
+(define (oo-error within msg . culprits)
+  ;; ignore within parameter; error is a macro in PC Scheme
+  (error msg culprits) )
+
+;;; End of adaptation of Meroon for PC-Scheme.

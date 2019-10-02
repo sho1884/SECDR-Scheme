@@ -1,0 +1,117 @@
+;;;                            schelog
+;;;                 An Embedding of Prolog in Scheme
+;;;          Written by Dorai Sitaram, Rice University, 1989
+;;;     Permission is granted for unrestricted non-commercial use
+
+The syntax of the Prolog provided here may be unusual.
+
+This note assumes you already know enough of Prolog and Scheme, at
+least syntax-wise. It will just show some examples whereby you can
+figure out how to transfer your knowledge of writing programs in
+"real" Prolog to writing in schelog.
+
+The member predicate in "real" Prolog:
+
+member(X, [X|Xs]).
+member(X, [Y|Ys]) :- member(X,Ys).
+
+The _same_ program in schelog:
+
+(define %member
+  (rel (x xs y ys)
+    [(x [cons x xs])]
+    [(x [cons y ys]) (%member x ys)]))
+
+It is a convention (which can be flouted) that all schelog predicates
+are named with an inital %. This is solely to avoid confusion with
+Scheme procedures of the same name. Use arbitrary naming systems as
+you please.
+
+Relations are defined using the form rel. rel is followed by a list of
+identifiers, these being the names of the logic variables used in the
+definition of the relation. There is no naming convention involved here
+(as say initial-capital as in Prolog). cons is the constructor | of
+Prolog. rel introduces the list of rules corresponding to the relation.
+
+For another example, the if-then-else predicate in "real" Prolog:
+
+if_then_else(P, Q, R) :- P, !, Q.
+if_then_else(P, Q, R) :- R.
+
+The _same_ in schelog reads:
+
+(define %ifthenelse
+  (rel (p q r)
+    [(p q r) p ! q]
+    [(p q r) r]))
+
+The cut is written !, as in Prolog.
+Anonymous variables are written (_), thus member could also be written:
+
+(define %member
+  (rel (x xs)
+    [(x [cons x (_)])]
+    [(x [cons (_) xs]) (%member x xs)]))
+
+which corresponds to:
+
+member(X, [X|_]).
+member(X, [_|Xs]) :- member(X, Xs).
+
+This should give you a feel for the syntax. If not, read some of the
+example files provided for further exposure.
+
+The interactive Prolog queries (?-) are handled with the form which:
+
+(which () (%member 1 '[1 2 3]))
+
+corresponds to ?- member(1, [1,2,3])
+
+and returns
+
+#t ;				more?
+
+Typing n or no after the more? prompt throws away all the other
+answers, as in Prolog. Typing anything other than n or no (e.g., y)
+provides alternate solutions. Here, there being no alternate
+solutions, typing y gives ().
+
+#t ;				more? y
+()
+
+which is followed by a list of logic variables whose bindings are
+given as the solution. Thus
+
+(which (x) (%member x '[1 2 3])) gives
+ x = 1
+#t ;				more?
+
+Prodding for more answers of course gives the following:	
+
+ x = 1
+#t ;				more? y
+ x = 2	
+#t ;				more? y
+ x = 3				
+#t ;				more? y
+
+One could also use the style (letref (x ...) (which (y ...) queries
+...)). Both letref and which introduce logic variables. However, in
+the solutions, only the which-variables are enumerated. E.g.,
+
+(letref (x) (which () (%member x '[1 2 3])))
+
+succeeds three times, without giving the values of x.
+
+#t ;				more? y
+#t ;				more? y
+#t ;				more? y
+()
+ 
+Since schelog relations are just Scheme procedures, one can use
+lexical scoping to define auxiliary relations, e.g., reverse using an
+auxiliary that uses an accumulator (see toys.ss).  One is also not
+tied to the Prolog style--regular Scheme can be used too, treating the
+Prolog relations as just another paradigm used for local convenience
+and along with other paradigms, such as streams, coroutines and other
+Scheme procedures and forms.

@@ -1,0 +1,157 @@
+
+                        インストール方法について
+
+                                                     平成5年6月20日
+
+            Copyright (C) 1990, 1991, 1992, 1993  Shoichi Hayashi (林 祥一)
+
+以下の説明は、ディレクトリScheme配下の構成が、配布時の圧縮を展開した状態の
+ままで変更されていないことを前提としています。
+
+1. 環境変数を設定します。
+
+SECDR_BOOT_PATH
+boot.bin, Init.scmの双方が置かれているディレクトリのパスを指定して下さい。
+
+SECDR_LIBRARY_PATH
+附属のライブラリ等のコンパイル済みファイルを置くディレクトリのパスを指定して
+下さい。
+
+SCHEME_LIBRARY_PATH
+jafferのslib(README参照)を置くディレクトリのパスを指定して下さい。
+
+注）Scheme配下の構成を変えてしまうと、以下でのライブラリの構築が面倒になり
+    ます。
+
+unixの場合の例）
+
+setenv SECDR_BOOT_PATH /usr/lang/Scheme/SECDR/
+setenv SCHEME_LIBRARY_PATH /usr/lang/Scheme/slib/
+setenv SECDR_LIBRARY_PATH /usr/lang/Scheme/secdrlib/bin/
+
+Macの場合）
+MPWのShell上では環境変数が存在しますが、ThinkCで作成したアプリケーション版や、
+ASL-Tool版では一般には環境変数というものは存在しません。
+それゆえアプリケーション版の場合は、このアプリケーションとboot.bin, Init.scm
+は同一のフォルダー内の同一階層に存在しなければなりません。
+ASL-Tool版の場合は、ASL-Toolとboot.bin, Init.scmは全てシステムフォルダーの直
+下に置かなければなりません。
+あるいは、システムフォルダー内のPreferencesフォルダーの直下にmockEnvというテ
+キストファイルを作成し、以下のように記述することもできます。
+
+SECDR_BOOT_PATH = "HD:lang:Scheme:SECDR:"
+SCHEME_LIBRARY_PATH = "HD:lang:Scheme:slib:"
+SECDR_LIBRARY_PATH = "HD:lang:Scheme:secdrlib:bin:"
+
+このようにここに
+
+ENV_NAME = "VAL"
+
+と記述することによって環境変数一般の代わりをさせることができます。
+
+2. コンパイル
+
+ソースはScheme/SECDRの配下にあります。ここをカレントディレクトリにして下さい。
+makefileはunixの設定にしてありますから、DOSなどの他の場合はコメントアウトして
+ある部分を適当に直して、ここでmakeを実行して下さい。
+これで実行形式secdrscmが出来上がるはずです。
+
+3. 動作確認
+
+secdrscmを実行し、カレントディレクトリをtestに移して下さい。
+
+> (cd "../test")
+
+Macの場合の注意）
+    pwd, cd は ThinkCで作成した Mac版(ASL-Tool版を含む)でも使えます。
+    また、ライブラリのコンパイルが完了するまでは、実行開始時にファイルが見つか
+    らないので、ダイアログボックスが現れる場合がありますが、この場合はキャンセ
+    ルを選んでください。
+
+そして
+
+> (load "test")
+
+を実行して下さい。
+
+
+4. ライブラリのコンパイル
+
+secdrscmの存在するディレクトリにカレントディレクトリを戻して下さい。
+そして
+
+> (load "mklib")
+
+を実行して下さい。そしてInit.scmの以下の部分を必要に応じて変更して下さい。
+
+(lib-load "amb" #f #t)
+(lib-load "pcall" #f #t)
+;(lib-load "module" #f #t)
+;(lib-load "schelog" #f #t)
+;(lib-load "methods" #f #t)
+;(lib-load "meroon" #f #t)
+(lib-load "tiny-clos" #f #t)
+
+次回からは立ち上げ時にこれらのライブラリが読み込まれるよう
+になるはずです。
+
+5. その他
+
+Init.scmを必要に応じて書き換えて下さい。
+
+slibを使う方はmkslibをロードして前もってコンパイルしておいた方が良いでしょう。
+(注: secdrlibのmoduleを読み込んだ後ではマクロ名fromが重複してエラーになって
+しまいますますので、こちらを先にコンパイルして下さい。)
+さらにrequireがコンパイルされたファイルの方を読み込めるようにするために、
+require.scmファイルの*catalog*の定義の中の、
+
+          (in-vicinity (library-vicinity) (cdr p) (scheme-file-suffix)))))
+
+となっている行を、以下のように修正して下さい。
+
+          (in-vicinity (library-vicinity) (cdr p) ))))
+
+slibに含まれるマクロを用いたもの(fluidlet.scm, yasos.scm, collect.scm)では、
+マクロは決まった使われ方しかされていませんので、次の要領で書き換えれば、
+SECDR-Scheme標準のマクロで実行できるようになります。
+
+決まった使われ方とは、
+
+(define-syntax INSTANCE-DISPATCHER  ;; alias so compiler can inline for speed
+   (syntax-rules () ((instance-dispatcher inst) (cdr inst)))
+)
+
+といったように、
+
+(define-syntax <NAME>
+   (syntax-rules () <BODY>))
+
+の形態をしていますので、これを
+
+(extend-syntax (<NAME>)
+   <BODY>)
+
+のように書き換えます。
+
+例えば上の例は
+
+(extend-syntax (INSTANCE-DISPATCHER)
+   ((instance-dispatcher inst) (cdr inst)))
+
+とすれば良いことになります。
+
+jafferのjacal(README参照)を使う場合は添付したパッチを当てて、これもコンパイ
+ルしておいた方が良いでしょう。
+パッチの内容はマクロ名と重複している変数名を変更してあるだけです。
+このように、SECDR-Schemeではr4rsに対して拡張されたいくつかのマクロが存在し
+ます。またユーザ自身がマクロを定義することもできます。このとき気をつけなけ
+ればならないことは、一度マクロ名として定義したものは変数名としては使えない
+ということです。名前が重複してしまった場合は、どちらかの名前を付け替えて下
+さい。
+
+boot.bin はブートストラップで必要ですから付けてありますが、これを作成し直し
+たい時は(load "mkboot")を実行して下さい。
+
+MacintoshのThinkCで作成したものは、バックグラウンドでも動きますが、画面の再
+描画に関してのみまだ問題を残しています。ASL-Edit+はバージョン1.0/a37以降の
+ものを使用して下さい。また、十分なメモリ領域(5M程度以上)を割り当てて下さい。

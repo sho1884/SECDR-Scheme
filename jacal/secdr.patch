@@ -1,0 +1,57 @@
+*** parse.scm.orig	Tue Dec 15 13:05:40 1992
+--- parse.scm	Mon Jan  4 11:19:04 1993
+***************
+*** 225,232 ****
+    (lex:tab-get *lex-rules* (if (eof-object? x) cgol:char0 x)))
+  (define (lex)
+    (let* ((char (lex:read-char))
+! 	 (rec (lex:tab-geteof char))
+! 	 (proc (and rec (lex:cc rec)))
+  	 (clist (list char)))
+      (cond
+       ((not proc) char)
+--- 225,232 ----
+    (lex:tab-get *lex-rules* (if (eof-object? x) cgol:char0 x)))
+  (define (lex)
+    (let* ((char (lex:read-char))
+! 	 (recv (lex:tab-geteof char))
+! 	 (proc (and recv (lex:cc recv)))
+  	 (clist (list char)))
+      (cond
+       ((not proc) char)
+***************
+*** 233,239 ****
+       ((procedure? proc)
+        (do ((cl clist (begin (set-cdr! cl (list (lex:read-char))) (cdr cl))))
+  	  ((proc (lex:peek-char))
+! 	   (funcall (lex:sfp rec) clist))))
+       ((eqv? 0 proc) (lex))
+       (else
+        (do ((cl clist (begin (set-cdr! cl (list (lex:read-char))) (cdr cl))))
+--- 233,239 ----
+       ((procedure? proc)
+        (do ((cl clist (begin (set-cdr! cl (list (lex:read-char))) (cdr cl))))
+  	  ((proc (lex:peek-char))
+! 	   (funcall (lex:sfp recv) clist))))
+       ((eqv? 0 proc) (lex))
+       (else
+        (do ((cl clist (begin (set-cdr! cl (list (lex:read-char))) (cdr cl))))
+***************
+*** 241,248 ****
+  		       (cclass (and prec (lex:cc prec))))
+  		  (or (eqv? cclass proc)
+  		      (eqv? cclass (- proc 1)))))
+! 	   (if (lex:sfp rec)
+! 	       (funcall (lex:sfp rec) clist)
+  	       (list->string clist))))))))
+  
+  ;;; Now for the way we use LEX.
+--- 241,248 ----
+  		       (cclass (and prec (lex:cc prec))))
+  		  (or (eqv? cclass proc)
+  		      (eqv? cclass (- proc 1)))))
+! 	   (if (lex:sfp recv)
+! 	       (funcall (lex:sfp recv) clist)
+  	       (list->string clist))))))))
+  
+  ;;; Now for the way we use LEX.

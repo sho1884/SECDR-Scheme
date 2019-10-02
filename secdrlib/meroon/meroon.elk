@@ -1,0 +1,111 @@
+;;; $Id$
+;;; Copyright (c) 1990, 91, 92 by Christian Queinnec. All rights reserved.
+
+;;;                            *******************************
+;;;                            ELK Adaptation for Meroon
+;;;                            *******************************
+
+;;; This file contains the necessary adaptation for ELK. You must load
+;;; it in the global-environment as in:
+;;;      (load "meroon.elk" (global-environment))
+;;;      (load "meroon.scm" (global-environment))
+
+;;; This program is distributed in the hope that it will be useful.
+;;; Use and copying of this software and preparation of derivative works
+;;; based upon this software are permitted, so long as the following
+;;; conditions are met:
+;;;      o credit to the authors is acknowledged following current
+;;;        academic behaviour
+;;;      o no fees or compensation are charged for use, copies, or
+;;;        access to this software
+;;;      o this copyright notice is included intact.
+;;; This software is made available AS IS, and no warranty is made about 
+;;; the software or its performance. 
+
+;;; Bug descriptions, use reports, comments or suggestions are welcome.
+;;; Send them to    
+;;;   <queinnec@polytechnique.fr>   or to:   <Christian.Queinnec@inria.fr>
+;;;                                 or to:
+;;;   Christian Queinnec                     Christian Queinnec
+;;;   Laboratoire d'Informatique de l'X      INRIA -- Rocquencourt
+;;;   Ecole Polytechnique                    Domaine de Voluceau, BP 105
+;;;   91128 Palaiseau                        78153 Le Chesnay Cedex
+;;;   France                                 France
+
+;;;************************************************
+;;;    Small, Efficient and Innovative Class System
+;;;       Christian Queinnec  
+;;;   \'Ecole Polytechnique & INRIA-Rocquencourt
+;;;************************************************
+
+(define (flat l)
+  (define (flatten l r)
+    (cond ((pair? l)
+           (flatten (car l) (flatten (cdr l) r)) )
+          ((null? l) r)
+          (else (cons l r)) ) )
+  (flatten l '()) )
+
+(define-macro (define-oo-macro call . body)
+  `(define-macro ,call 
+      ;;(format #t "expanding ~a.~%" (list ',(car call) . ,(flat (cdr call))))
+      . ,body ) )
+
+;;; ELK is only an interpreter but variables created by oo-set! must
+;;; be globally visible.                                  ;; HACK
+(define-oo-macro (oo-set! name form)
+  `(let ((v ,form))
+     (eval (list (if (bound? ',name) 'set! 'define)
+                 ',name 
+                 (list 'quote v) )
+           (global-environment) ) ) )
+
+(define-oo-macro (oo-apply fn . args)
+  `(apply ,fn . ,args) )
+
+(define gensym
+  (let ((counter 99))
+    (lambda args
+      (set! counter (+ counter 1))
+      (oo-concat (if (pair? args) (car args) 'G)
+              counter ) ) ) )
+
+(define (oo-concat . names)
+  (string->symbol
+   (apply string-append
+          (map (lambda (thing)
+                    (cond ((symbol? thing) 
+                           (symbol->string thing) )
+                          ((string? thing) thing)
+                          ((number? thing)
+                           (number->string thing) )
+                          (else (error "non coercible to String"
+                                        thing )) ) )
+                  names ) ) ) )
+
+(define (mapcan f l)
+  (if (pair? l)
+      (append (f (car l)) (mapcan f (cdr l)))
+      '() ) )
+
+(define (every? p . args)
+  (let andmap ((args args) (value #t))
+    (if (let any-at-end? ((ls args))
+          (and (pair? ls)
+               (or (not (pair? (car ls)))
+                   (any-at-end? (cdr ls)))))
+        value
+        (let ((value (apply p (map car args))))
+          (and value (andmap (map cdr args) value))))))
+
+(define (remove item list)
+  (if (pair? list)
+      (if (equal? item (car list))
+          (cdr list)
+          (cons (car list) (remove item (cdr list))) )
+      list ) )
+
+(define (oo-error within msg . culprits)
+  (error within msg culprits) )
+
+;;; End of adaptation of Meroon for ELK.

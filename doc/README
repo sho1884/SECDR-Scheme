@@ -1,0 +1,217 @@
+
+   =====================================================================
+
+      ------------------- SECDR-Scheme Version 1.0 -------------------
+
+        Version 1.0 coded and modified by Shoichi Hayashi (6/23/1993)
+              E-MAIL :  s-haya@rst.fujixerox.co.jp
+              MIX    :  s.hayasi
+       -------------------------------------------------------------
+
+       SECDR-Scheme Version 0.65 coded by Atsushi Moriwaki (3/6/1990)
+
+              E-MAIL :  moriwaki@kurims.kurims.kyoto-u.ac.jp
+              MIX    :  riemann
+              NIFTY  :  PBB01074
+
+   =====================================================================
+
+    Copyright (C) 1990, 1991, 1992, 1993      Atsushi Moriwaki(森脇 淳),
+                                              Shoichi Hayashi(林  祥一)
+
+ =========================================================================
+
+  SECDR-Scheme conforms to Revised^4 Report on the Algorithmic Language
+  Scheme and the IEEE P1178 specification. SECDR-Scheme is written in C 
+  and runs under MacOS, MS-DOS, Unix and similar systems.
+
+    SECDR Scheme is based on LISP-Kit LISP in "Functional Programming
+    -- Application and Implementation" by Peter Henderson.
+    But some machine transitions are differnt from original one to
+    implement tail-recursion.
+
+------------------------------------------------------------------------------
+
+[ SECDR-Schemeの紹介 ]
+
+SECDR-Schemeは「GNU一般公有使用許諾」に基づくフリーソフトウェアです。
+
+このSECDR-Schemeは京都大学理学部数学教室（現在はUCLA数学教室の助教授）の
+森脇 淳によってその母体が作成されました。
+その後、富士ゼロックス（株）システム・コミュニケーション研究所に所属する
+林 祥一によって拡張と修正が続けられてきたものです。
+
+SECDR-Scheme 1.0 はSparc Station 2上のcc, gcc2.X, Macintosh上のMPW C 3.2, 
+MPW gcc, Think C(version4, 5)でのコンパイルと実行を確認しています。また、
+MacintoshではASLEdit+のToolとして動作させることも可能です。
+(ただし、ASLEdit+のTool版は68020, 68881以上を必要とします。)
+MS-DOSの上ではテストを行なっていません。
+
+SECDR-Schemeの処理系では、Schemeのプログラムは仮想マシンの機械語にコンパイル
+されてから、仮想マシンによって実行が行なわれます。SECDR-Schemeの仮想マシンは、
+その名前からも容易に想像できますように、SECDマシンの変形の一つです。SECDマシ
+ンの最初の原型は、Landinが関数型言語Iswimやそれらの形式的な操作的意味論のた
+めに考案した抽象機械でしたが、後に、Peter HendersonがLispkit Lispのインプリ
+メントのために、これを変形したものを用いています。そして、このSECDR-Schemeの
+仮想マシンであるSECDRマシンは、このHendersonの示したSECDマシンに基づいて作成
+されたものです。しかし、主に末尾再帰に対処するために、マシンのいくつかの状態
+遷移は異なったものとなっています。つまり、さらに変形したものの一つとなってい
+るということです。
+
+このように、本処理系は操作的意味を与える抽象機械がそのまま動いているようなも
+のです。そしてその抽象機械のわかり易さを優先したため、実行速度に関しては特別
+な配慮を行なっていません。ですから速度については、はっきりいって速くはありま
+せん。
+
+しかし、Scheme言語についても充分な学習や実験が行えるように、R4RSの仕様に準拠
+した処理系になっています。具体的には、R4RSを満たしていれば利用できるjafferの
+ライブラリslib, 数式処理システムjacalが問題なく動きます。(slibに含まれるオブ
+ジェクト指向システムyasosも利用できます。) emacs上で利用可能なソースレベルデ
+バッガpsdもSECDR-Scheme特有のマクロを含まなければ利用できることを確認してい
+ます。その他、動作することを確認しているものについては後述します。
+
+また、もともとR4RS対応ではなかったために、多少移植の手間を要したもの等に関し
+ては附属のライブラリとしてsecdrlibの下に添付してあります。この中にはschelog
+というSchemeで書かれたPrologや、tiny-clos, meroon, methodsといったオブジェク
+ト指向ライブラリ, 疑似並列処理を実現するpcall, モジュール管理のためのmodule
+等が含まれています。またsecdrlibの下には、独自に作成した非決定性のオペレータ
+ambのライブラリも添付してあります。これはHendersonの著書による方法とはやや異
+なり、call/ccによって実現されています。
+
+
+[ ドキュメントについて ]
+
+インストールの仕方についてはINSTALLを参照して下さい。
+その他 MANUAL には、SECDR-SchemeのR4RSに対して拡張されている部分についての
+説明があります。また、MACHINE にはSECDRマシンについての簡単な解説があります。
+secdrscm.texとそれに付随するTeXのファイルは、MANUAL と MACHINE のドキュメン
+トのTeX(アスキー日本語LaTeX)版ですが、特にcontinuationに関する解説と、附属
+のライブラリのambに関する解説も含めてあります。TeXが利用できない方は、ambに
+ついてはソースファイルのamb.scmのコメントに、同様の詳しい解説がしてあります
+ので、そちらを参照して下さい。
+
+
+[ SECDR-Schemeの使用許諾契約について ]
+
+上述しましたように、SECDR-Scheme本体は「GNU一般公有使用許諾」に基づくフリー
+ソフトウェアでが、同時に配布される本体以外の(例えばsecdrlib, examples等に含
+まれる)ものについてはこの限りではありません。 PDSやNewsに流れたもの、さらに
+「GNU一般公有使用許諾」とは異なる方法で、自由な配布を認めているが著作権を放
+棄しているわけではないもの等も含まれています。これらについては各々の指示に従
+うようにして下さい。
+
+例えば以下のようなものが含まれます。
+
+  ----------------------------------------------------------------------------
+  uniqprnt.scm
+        Masahiro Hirata
+
+  trace.scm
+  pprint.scm
+        Akira Kida
+
+  macros.scmのquasiquoteに関する一部
+        Copyright 1988 by Eric S. Tiedemann; all rights reserved.
+
+  extend.scm
+        Copyright (C) 1987 Cadence Research Systems
+
+  basic.scmのrationalize procedure
+        Alan Bawden. -- ALAN@AI.AI.MIT.EDU --
+
+  meroon.scm,v 2.22
+        Copyright (c) 1990, 91, 92 by Christian Queinnec. All rights reserved.
+
+  module.scm
+        From: kobler@informatik.tu-muenchen.de (Daniel Kobler)
+
+  methods.scm  (ADDENDUM)
+        From: brian@jade.jpl.nasa.gov (Brian of ASTD-CP)
+
+  schelog An Embedding of Prolog in Scheme
+        Written by Dorai Sitaram, Rice University, 1989
+        Permission is granted for unrestricted non-commercial use
+
+  tiny-clos
+        Copyright (c) 1992 Xerox Corporation. ; All Rights Reserved.  
+
+  PCALL and other high tech control structures in Scheme
+        Christian Queinnec queinnec@poly.polytechnique.fr
+        Ecole Polytechnique and INRIA-Rocquencourt
+
+  test.scm Test correctness of scheme implementations.
+        Copyright (C) 1991, 1992 Aubrey Jaffer.
+
+  ----------------------------------------------------------------------------
+
+また、Macintoshでは以下のものを利用可能とし、配布内容に含めています。
+
+  ----------------------------------------------------------------------------
+  GetPref.c
+        Timothy Murphy <tim@maths.tcd.ie>
+
+  MacChdir.c の一部
+        Copyright (c) 1987 Regents of the University of California.
+        All rights reserved.
+
+  特にASL-Edit+のツールとして必要となるThinkC用のASLToolA4.pライブラリは
+  NiftyのFMACPRO等で公開されているものとは、やや異なるものです。これに関
+  してはASLEdit+の作者の山田浩大さんにご協力をいただきました。また、山田
+  さんには、ASLEdit+についてもversion1.0/a37よりSECDR-Schemeのメニューを
+  追加して頂くなどのいくつかの対処についてもご協力を頂きました。
+
+  ----------------------------------------------------------------------------
+
+上述したものの大部分は、nexus.yorku.ca から anonymous ftp で入手することが
+できます。
+
+
+[ SECDR-Schemeで利用可能な他のソフトウェアについて ]
+
+また以下に示すものは上述のものと同様に nexus.yorku.ca から入手でき、各々の指
+定のconfiguration(このために特に必要となると思われるファイルは添付してありま
+す。)のみで、特に移植作業を必要とせずに、動作することを既に確認しています。
+
+  ----------------------------------------------------------------------------
+  PSD - THE PORTABLE SCHEME DEBUGGER VERSION 1.0
+        Pertti Kellom\"aki (TeX format), pk@cs.tut.fi
+             Tampere Univ. of Technology
+                 Software Systems Lab
+                       Finland
+
+  SchemeWEB---Simple support for literate programming in Lisp.
+        SchemeWEB is a Unix filter that translates SchemeWEB source into LaTeX
+        source or Scheme source.  Originally developed for the Scheme dialect 
+        of Lisp, it can easily be used with most other dialects.
+        John D. Ramsdell.
+        Copyright 1990 by The MITRE Corporation
+
+  Similix, a Self-Applicable Partial Evaluator for a Subset of Scheme
+        Copyright (C) 1993 Anders Bondorf
+
+  jacal1a. Jacal is a symbolic mathematics system which runs under Scheme
+         language implementations.
+        The author can be reached at jaffer@ai.mit.edu or
+        Aubrey Jaffer, 84 Pleasant St., Wakefield MA 01880.
+
+  SLaTeX Version 1.99
+        (c) Dorai Sitaram, December 1991, Rice University Houston, Texas
+
+  slib1d2. SLIB is a portable scheme library meant to provide compatibiliy and
+         utility functions for all standard scheme implementations.
+        jaffer@zurich.ai.mit.edu (Aubrey Jaffer)
+
+  ----------------------------------------------------------------------------
+
+
+[ 作者の連絡先 ]
+
+  〒240 横浜市保土ヶ谷区神戸町134   横浜ビジネスパーク・イーストタワー13階
+  富士ゼロックス株式会社    総合研究所  システム・コミュニケーション研究所
+
+  林  祥一
+  JUNET: s-haya@rst.fujixerox.co.jp
+    MIX: s.hayasi
+
+  これ以降のバージョンに関して、原作者の森脇氏の方へ問い合わせることは
+  ご遠慮下さい。

@@ -1,0 +1,640 @@
+From kobler@informatik.tu-muenchen.de Tue Jul  7 15:31:09 1992
+From: kobler@informatik.tu-muenchen.de (Daniel Kobler)
+Newsgroups: comp.lang.scheme
+Subject: MODULE
+Date: 29 Jun 92 09:58:53 GMT
+Distribution: comp.lang.scheme
+Organization: Inst. fuer Informatik, Technische Univ. Muenchen, Germany
+
+hi all,
+
+some weeks ago I asked about modules and proposals on their
+implementation in Scheme. I almost got no response (just 2 messages).
+I combined their ideas (which were similar) with mine and built
+up a simple module system allowing to specify a i/o interface.
+A module is nothing but a list of names associated with objects defined
+in a local space (by let/letrec). The locality allows to hide internal
+descriptions and to restrict access to a specified list of objects.
+However, this system is a very simple one, but it works.
+
+The implementation bases on Kent Dybvig's `extend-syntax' feature.
+
+Example:
+  Provide a list of functions that work on lists.
+
+------------------------------ lst.scm -------------------------------
+;\Title{lst}
+; :
+; [omitted]
+; :
+;\Implementation
+(MODULE lst
+        (EXPORT every?
+                delete!)
+
+        (INIT
+          (display "MODULE lst loaded.") (newline))
+
+        ;\Part{every?}
+        ; Test whether every element of a list satisfies a given predicate.
+        (every?
+          (lambda (proc l)
+            (or (null? l)
+                (and (proc (car l))
+                     (every? proc (cdr l))))))
+
+        ;\Part{delete!}
+        ; Delete all those elements having the specified quality from the list.
+        (delete!
+          (lambda (proc l)
+            (cond ((null? l)
+                   '())
+                  ((proc (car l))
+                   (delete! proc (cdr l)))
+                  (else
+                    (set-cdr! l (delete! proc (cdr l)))
+                    l)))))
+--------------------------- end of lst.scm ---------------------
+
+Now we have a module `lst' that exports two objects: delete! and every?
+These two objects may be imported into other modules or the top-level 
+environment, e.g.
+
+(IMPORT lst)
+  --> delete! and every? available at top-level / importing module
+
+(IMPORT QUALIFIED lst)
+  --> lst:delete! and lst:every? available at top-level / imp. module
+
+(FROM lst IMPORT every? QUALIFIED delete!)
+  --> every? and lst:delete! available ...
+
+(FROM lst IMPORT (every? AS abc?) QUALIFIED (delete! AS kill!))
+  --> abc? and lst:kill! available ...
+
+Renaming imported names is useful in many cases. For example, it can
+help to clearify the meaning of generic functions in a certain
+context. You could import function `prefix' of a module `sequence'
+into a module `stack' (that is to base on the former module) as
+`push'.
+
+Now for the module system itself.
+----------------------------- module.s --------------------------
+;\Title{MODULE}
+;$Id: module.s 1.1 92/06/11 16:13:19 kobler Stab $
+;$Log:	module.s $
+;Revision 1.1  92/06/11  16:13:19  kobler
+;Initial revision
+;
+;\Description
+; A modul comprises constants, data types, variables, and procedures. Some
+; of these parts are made available to other modules by exporting their names.
+; However, the internal structure, the implementation of the module, is
+; hidden from other modules.
+;
+;\Import
+;---
+;
+;\Export
+;(MODULE <module>
+;  <EXPORT>
+;  <IMPORT>
+;  <INIT>
+;  <definitions>)
+; Define a module. A module exports all those objects associated with the
+; names specified in the <EXPORT> section, and it is based on those
+; imported by the <IMPORT> section. <INIT> allows to do some initializations
+; at load time. The <definitions> build the module's body.
+;
+; <EXPORT>
+;   syntax: (EXPORT <name1> <name2> ...)
+;     The module <module> provides the objects associated with <name1>,
+;     <name2>, etc. Renaming is done by replacing <namei> with
+;     (<namei> AS <newnamei>).
+; <IMPORT>
+;  syntax: (IMPORT <imodule>)
+;    Import all names exported by module <imodule>.
+;  syntax: (IMPORT QUALIFIED <imodule>)
+;    Import all names exported by module <imodule>. All names are `qualified'
+;    (i.e.\ preceeded) by `<imodule>:'.
+;  syntax: (FROM <imodule> IMPORT <iname1> ... [QUALIFIED <iqname1> ...])
+;    Import the specified names (unqualified/qualified) from module <imodule>.
+;    Again, it is possible to rename a <i(q)name> by replacing it with
+;    (<i(q)name> AS <new i(q)name>).
+; <INIT>
+;  A sequence of expressions to be performed when loading the module.
+; <definitions>
+;  The body of the module. Think of these definitions as if they were
+;  part of a big letrec, i.e.\ each definition may refer to another
+;  definition of <definitions>.
+;
+; Another macro is provided: (EXPORTED BY <module>). It returns the
+; list of names exported by <module>.
+;
+; Additionally there is a macro that allows to import an object from a
+; module WITHOUT automatic definition of a name for it:
+; (IMPORT <name> FROM <module>)
+;
+;
+;\Implementation
+; Return a list of all names a module exports.
+;
+(extend-syntax (EXPORTED BY)
+  ((EXPORTED BY <module>)
+   (map car <module>)))
+
+; The special form {\tt IMPORT} retrieves the object associated with
+; \Meta{name} from module \Meta{module}. If no object is associated
+; \ScmFALSE\ will be returned.
+;
+(define import-from
+  (lambda (name modul)
+    (let ((probe (assq name modul)))
+      (if probe
+          (cdr probe)
+          (error "Name not exported by module" (list name modul))))))
+
+(extend-syntax (IMPORT FROM QUALIFIED)
+  ((IMPORT <name> FROM <module>)
+   (import-from '<name> <module>))
+  ((IMPORT QUALIFIED <module>)
+   (with (((<names> ...) (EXPORTED BY (eval '<module>))))
+         (FROM <module> IMPORT QUALIFIED <names> ...)))
+  ((IMPORT <module>)
+   (with (((<names> ...) (EXPORTED BY (eval '<module>))))
+         (FROM <module> IMPORT <names> ...))))
+
+; Make available a {\it module's names\/} by importing and subsequently
+; defining them in the current environment. Use this syntax only
+; in contexts where `internal definitions' are allowed (see \RfourRS).
+; Additionally, it is possible to determine an individual name for
+; an imported service.
+;
+(let
+  ;
+  ; Qualifying a \Meta{name} exported by a \Meta{module} means to prefix
+  ; the \Meta{name} with the \Meta{module}'s name followed
+  ; by a `:'.
+  ;
+  ((make-qualified-name
+     (lambda (m n)
+       (string->symbol
+         (string-append (symbol->string m) ":" (symbol->string n))))))
+
+  ; Import a list of objects from a \Meta{module} defining \Meta{names}
+  ; the objects are to be refered to. Various ways of determing a \Meta{name}
+  ; are available (see explanation of the patterns below).
+  ;
+  (extend-syntax (FROM IMPORT QUALIFIED AS)
+
+    ; Qualified and modified name.
+    ((FROM <module> IMPORT QUALIFIED (<name> AS <newName>))
+     (with ((<qualifiedNewName> (make-qualified-name (quote <module>)
+                                                     (quote <newName>))))
+           (define <qualifiedNewName> (IMPORT <name> FROM <module>))))
+
+    ; Qualified name.
+    ((FROM <module> IMPORT QUALIFIED <name>)
+     (with ((<qualifiedName> (make-qualified-name (quote <module>)
+                                                  (quote <name>))))
+           (define <qualifiedName> (IMPORT <name> FROM <module>))))
+
+    ; Modified name.
+    ((FROM <module> IMPORT (<name> AS <newName>))
+     (define <newName> (IMPORT <name> FROM <module>)))
+
+    ; Original name.
+    ((FROM <module> IMPORT <name>)
+     (define <name> (IMPORT <name> FROM <module>)))
+
+    ; Import a sequence of qualified names.
+    ((FROM <module> IMPORT QUALIFIED <name> <names> ...)
+     (begin
+       (FROM <module> IMPORT QUALIFIED <name>)
+       (FROM <module> IMPORT QUALIFIED <names> ...)))
+
+    ; Import a list of unqualified names (maybe followed by qualified ones).
+    ((FROM <module> IMPORT <name> <names> ...)
+     (begin
+       (FROM <module> IMPORT <name>)
+       (FROM <module> IMPORT <names> ...))))
+
+) ;< end of \Code{let}
+
+; Extend the {\tt (export \dots)} syntax.
+;
+(extend-syntax (EXTEND-EXPORT AS)
+  ((EXTEND-EXPORT)
+   '())
+  ((EXTEND-EXPORT (<name> AS <newName>) <names> ...)
+   (cons (cons (quote <newName>) <name>)
+         (EXTEND-EXPORT <names> ...)))
+  ((EXTEND-EXPORT <name> <names> ...)
+   (cons (cons (quote <name>) <name>)
+         (EXTEND-EXPORT <names> ...))))
+
+; Extend a module definition's body.
+;
+(extend-syntax (EXTEND-MODULE EXPORT FROM IMPORT INIT)
+  ; The body imports something from another module \dots
+  ((EXTEND-MODULE
+     (EXPORT <eName1> ...)
+     (IMPORT <iModule> ...)
+     <body> ...)
+   (let ()
+     (IMPORT <iModule> ...)
+     (EXTEND-MODULE (EXPORT <eName1> ...)
+                    <body> ...)))
+
+  ((EXTEND-MODULE
+     (EXPORT <eName1> ...)
+     (FROM <iModule> IMPORT <iName1> ...)
+     <body> ...)
+   (let ()
+     (FROM <iModule> IMPORT <iName1> ...)
+     (EXTEND-MODULE (EXPORT <eName1> ...)
+                    <body> ...)))
+
+  ; There is nothing to import \dots
+  ((EXTEND-MODULE
+     (EXPORT <eName1> ...)
+     (INIT <init> ...)
+     <body> ...)
+   (letrec
+     (<body> ...)
+     <init> ...
+     (EXTEND-EXPORT <eName1> ...)))
+
+  ; There is nothing to import and no initialization \dots
+  ((EXTEND-MODULE
+     (EXPORT <eName1> ...)
+     <body> ...)
+   (letrec
+     (<body> ...)
+     (EXTEND-EXPORT <eName1> ...))))
+
+; Define a new module. The module's name is first class and contains the
+; exported names with the associated values (i.e.\ a simple association list).
+;
+(extend-syntax (MODULE EXPORT)
+  ((MODULE <name>
+           (EXPORT <eName1> ...)
+           <body> ...)
+   (define <name>
+     (EXTEND-MODULE (EXPORT <eName1> ...)
+                    <body> ...))))
+---------------------------- end of module.s --------------------
+
+As you can see a module expands to something equivalent to the following:
+
+(define <module>
+  (let ()
+    (begin
+      (define <(qualified)(new)name1> (import-from <imodule1> <name1>))
+      ...)
+  
+     (letrec (<definitions>)
+
+       <INIT sequence>
+
+	; the module as list: name + associated object
+	'((name1 . obj1) (name2 . obj2) ...))))
+
+That is you can use (IMPORT ..) or (FROM ... IMPORT ...) only in
+contexts where internal definitions are allowed.
+
+At last here is `extend.s' for PC Scheme:
+------------------------ extend.s ---------------------------
+;;; extend-syntax.sc
+
+;;; Copyright (C) 1987 Cadence Research Systems
+;;; Permission to copy this software, in whole or in part, to use this
+;;; software for any lawful noncommercial purpose, and to redistribute
+;;; this software is granted subject to the restriction that all copies
+;;; made of this software must include this copyright notice in full.
+;;; Cadence makes no warranties or representations of any kind, either
+;;; express or implied, including but not limited to implied warranties
+;;; of merchantability or fitness for any particular purpose.
+
+;;; The basic design of extend-syntax is due to Eugene Kohlbecker.  See
+;;; "E. Kohlbecker: Syntactic Extensions in the Programming Language Lisp",
+;;; Ph.D.  Dissertation, Indiana University, 1986."  The structure of "with"
+;;; pattern/value clauses, the method for compiling extend-syntax into
+;;; Scheme code, and the actual implementation are due to Kent Dybvig.
+
+;;; Made available courtesy R. Kent Dybvig
+;;; MacScheme (Version 1.2 or greater) conversion by Jeff De Vries
+;;; Scheme->C conversion by Hakan Huss
+;;; PC Scheme conversion by Bernhard Brandmair
+
+;;; A better PC Scheme implementation is in the standard PCS package
+;;; in PCS-SYSDIR\sources !!!
+
+
+
+;;; eval-when (compile eval)
+
+  (define (andmap p . args)
+    ;; use "first-finish" rule
+    (let andmap ((args args) (value #t))
+      (if (let any-at-end? ((ls args))
+	    (and (pair? ls)
+		 (or (not (pair? (car ls)))
+		     (any-at-end? (cdr ls)))))
+	  value
+	  (let ((value (apply p (map car args))))
+	    (and value (andmap (map cdr args) value)) ))))
+
+  ;; ormap (Huss) -- for some reason wasn't included even though andmap was...
+  (define (ormap p . args)
+    ;; use "first-finish" rule
+    (let ormap ((args args) (value #f))
+      (if (let any-at-end? ((ls args))
+	    (and (pair? ls)
+		 (or (not (pair? (car ls)))
+		     (any-at-end? (cdr ls)))))
+	  value
+	  (let ((value (apply p (map car args))))
+	    (or value (ormap (map cdr args) value)) ))))
+
+;;; syntax-match? is used by extend-syntax to choose among clauses and
+;;; to check for syntactic errors.  It is also available to the user.
+;;; eval-when (compile eval)
+  (define syntax-match?
+    (lambda (keys pat exp)
+      (cond
+       ((symbol? pat) 
+        (if (memq pat keys) (eq? exp pat) #t))
+       ((pair? pat)
+	(if (equal? (cdr pat) '(...))
+	    (let f ((lst exp))
+	      (or (or (not lst) (null? lst))
+		  (and (pair? lst)
+		       (syntax-match? keys (car pat) (car lst))
+		       (f (cdr lst)))))
+	    (and (pair? exp)
+		 (syntax-match? keys (car pat) (car exp))
+		 (syntax-match? keys (cdr pat) (cdr exp)))))
+       (else 
+        (equal? exp pat)) )))
+
+;;; The main code!
+;;; eval-when (compile eval)
+  (define id
+    (lambda (name accs control)
+      (list name accs control)))
+  (define id-name car)
+  (define id-access cadr)
+  (define id-control caddr)
+
+  (define loop
+    (lambda ()
+      (list '())))
+  (define loop-ids car)
+  (define loop-ids! set-car!)
+  
+  (define c...rs
+    `((car caar . cdar)
+      (cdr cadr . cddr)
+      (caar caaar . cdaar)
+      (cadr caadr . cdadr)
+      (cdar cadar . cddar)
+      (cddr caddr . cdddr)
+      (caaar caaaar . cdaaar)
+      (caadr caaadr . cdaadr)
+      (cadar caadar . cdadar)
+      (caddr caaddr . cdaddr)
+      (cdaar cadaar . cddaar)
+      (cdadr cadadr . cddadr)
+      (cddar caddar . cdddar)
+      (cdddr cadddr . cddddr)))
+  
+  (define add-car
+    (lambda (accs)
+      (let ((x (and (pair? accs) (assq (car accs) c...rs))))
+	(if (or (not x) (null? x))
+	    `(car ,accs)
+	    `(,(cadr x) ,@(cdr accs))))))
+  
+  (define add-cdr
+    (lambda (accs)
+      (let ((x (and (pair? accs) (assq (car accs) c...rs))))
+	(if (or (not x) (null? x))
+	    `(cdr ,accs)
+	    `(,(cddr x) ,@(cdr accs))))))
+  
+  (define parse
+    (lambda (keys pat acc cntl ids)
+      (cond
+       ((symbol? pat)
+	(if (memq pat keys)
+	    ids
+	    (cons (id pat acc cntl) ids)))
+       ((pair? pat)
+	(if (equal? (cdr pat) '(...))
+	    (let ((x (gensym)))
+	      (parse keys (car pat) x (id x acc cntl) ids))
+	    (parse keys
+		   (car pat)
+		   (add-car acc)
+		   cntl
+		   (parse keys (cdr pat) (add-cdr acc) cntl ids))))
+       (else ids))))
+  
+  (define gen
+    (lambda (keys exp ids loops)
+      (cond
+       ((symbol? exp)
+	(let ((id (extend-lookup exp ids)))
+	  (if (or (not id) (null? id))
+	      exp
+	      (begin
+		(add-control! (id-control id) loops)
+		(list 'unquote (id-access id))))))
+       ((pair? exp)
+	(cond
+	 ((eq? (car exp) 'with)
+	  (unless (syntax-match? '(with) '(with ((p x) ...) e) exp)
+		  (error "<extend-syntax> invalid 'with' form: " exp))
+	  (list 'unquote
+		(gen-with
+		 keys
+		 (map car (cadr exp))
+		 (map cadr (cadr exp))
+		 (caddr exp)
+		 ids
+		 loops)))
+	 ((and (pair? (cdr exp)) (eq? (cadr exp) '...))
+	  (let ((x (loop)))
+	    (make-loop
+	     x
+	     (gen keys (car exp) ids (cons x loops))
+	     (gen keys (cddr exp) ids loops))))
+	 (else
+	  (let ((a (gen keys (car exp) ids loops))
+		(d (gen keys (cdr exp) ids loops)))
+	    (if (and (pair? d) (eq? (car d) 'unquote))
+		(list a (list 'unquote-splicing (cadr d)))
+		(cons a d))))))
+       (else exp))))
+  
+  (define gen-with
+    (lambda (keys pats exps body ids loops)
+      (if (or (not pats) (null? pats))
+	  (make-quasi (gen keys body ids loops))
+	  (let ((p (car pats)) (e (car exps)) (g (gensym)))
+	    `(let ((,g ,(gen-quotes keys e ids loops)))
+	       (if (syntax-match? '() ',p ,g)
+		   ,(gen-with
+		     keys
+		     (cdr pats)
+		     (cdr exps)
+		     body
+		     (parse '() p g '() ids)
+		     loops)
+		   (error "<gen-with> does not fit 'with' pattern: "
+			  ,g ',p)))))))
+  
+  (define gen-quotes
+    (lambda (keys exp ids loops)
+      (cond
+       ((syntax-match? '(quote) '(quote x) exp)
+	(make-quasi (gen keys (cadr exp) ids loops)))
+       ((pair? exp)
+	(cons (gen-quotes keys (car exp) ids loops)
+	      (gen-quotes keys (cdr exp) ids loops)))
+       (else exp))))
+  
+  (define extend-lookup
+    (lambda (sym ids)
+      (let loop ((ls ids))
+	(cond
+	 ((null? ls) #f)
+	 ((eq? (id-name (car ls)) sym) (car ls))
+	 (else (loop (cdr ls)))))))
+  
+  (define add-control!
+    (lambda (id loops)
+      (unless (or (not id) (null? id))
+	      (when (or (not loops) (null? loops))
+		    (error "<extend-syntax> missing ellipsis in expansion"))
+	      (let ((x (loop-ids (car loops))))
+		(unless (memq id x)
+			(loop-ids! (car loops) (cons id x))))
+	      (add-control! (id-control id) (cdr loops)))))
+  
+  (define make-loop
+    (lambda (loop body tail)
+      (let ((ids (loop-ids loop)))
+	(when (or (not ids) (null? ids))
+	      (error "<extend-syntax> extra ellipsis in expansion"))
+	(cond
+	 ((equal? body (list 'unquote (id-name (car ids))))
+	  (if (or (not tail) (null? tail))
+	      (list 'unquote (id-access (car ids)))
+	      (cons (list 'unquote-splicing (id-access (car ids)))
+		    tail)))
+	 ((and (null? (cdr ids))
+	       (syntax-match? '(unquote) '(unquote (f x)) body)
+	       (eq? (cadadr body) (id-name (car ids))))
+	  (let ((x `(map ,(caadr body) ,(id-access (car ids)))))
+	    (if (or (not tail) (null? tail))
+		(list 'unquote x)
+		(cons (list 'unquote-splicing x) tail))))
+	 (else
+	  (let ((x `(map (lambda ,(map id-name ids) ,(make-quasi body))
+			 ,@(map id-access ids))))
+	    (if (or (not tail) (null? tail))
+		(list 'unquote x)
+		(cons (list 'unquote-splicing x) tail))))))))
+  
+  (define make-quasi
+    (lambda (exp)
+      (if (and (pair? exp) (eq? (car exp) 'unquote))
+	  (cadr exp)
+	  (list 'quasiquote exp))))
+  
+  (define make-clause
+    (lambda (keys cl x)
+      (cond
+       ((syntax-match? '() '(pat fender exp) cl)
+	(let ((pat (car cl)) (fender (cadr cl)) (exp (caddr cl)))
+	  (let ((ids (parse keys pat x '() '())))
+	    `((and (syntax-match? ',keys ',pat ,x)
+		   ,(gen-quotes keys fender ids '()))
+	      ,(make-quasi (gen keys exp ids '()))))))
+       ((syntax-match? '() '(pat exp) cl)
+	(let ((pat (car cl)) (exp (cadr cl)))
+	  (let ((ids (parse keys pat x '() '())))
+	    `((syntax-match? ',keys ',pat ,x)
+	      ,(make-quasi (gen keys exp ids '()))))))
+       (else
+	(error "<extend-syntax> invalid clause:" cl)))))
+  
+  (define make-syntax
+    (lambda (keys clauses x)
+      `(cond
+	,@(map (lambda (cl) (make-clause keys cl x)) clauses)
+	(else
+	 (error "<make-syntax> Invalid syntax:" ,x)))))
+  
+  ;;; end of eval-when
+
+
+(macro extend-syntax
+  (let ((x (gensym "X")))
+    (lambda (form)
+        (cond
+	  ((and
+             (syntax-match?
+               '(extend-syntax)
+               '(extend-syntax (key1 key2 ...) clause ...)
+               form)
+             (andmap symbol? `(,(caadr form) ,@(cdadr form))))
+	   (let ((f (make-syntax `(,(caadr form)
+                                    ,@(cdadr form))
+				 (cddr form) 
+				 x)))
+	     (if (syntax-match? '() 'proc f)
+		 `(macro ,(caadr form)
+		    (lambda (,x) ,f ))
+		 (error "<extend-syntax> does not fit 'with' pattern: "
+			f 'proc))))
+	  (else (error "<extend-syntax> invalid syntax: " form))) )))
+  
+  ;;; extend-syntax/code never used 
+  (macro extend-syntax/code
+    (let ((x (gensym "X")))
+      (lambda (form)
+          (cond
+            ((and
+               (syntax-match?
+                 '(extend-syntax/code)
+                 '(extend-syntax/code (key1 key2 ...) clause ...)
+                 form)
+               (andmap symbol? `(,(caadr form) ,@(cdadr form))))
+             (let ((f (make-syntax `(,(caadr form)
+                                      ,@(cdadr form))
+                                   (cddr form) x)))
+               (if (syntax-match? '() 'proc f)
+                   `',f
+                   (error "<extend-syntax/code> does not fit 'with' pattern: "
+                          f 'proc))))
+            (else (error "<extend-syntax/code> invalid syntax: " form))))))
+-------------------------- end of extend.s for PC Scheme ------------
+
+
+
+
+Well, at least it works. Send any suggestions, critics, additional
+ideas,... to me, please.
+
+Thanks in advance,
+
+   - Daniel ][
+
+--
+Daniel Kobler                        kobler@kiss.informatik.tu-muenchen.de
+ TU  Muenchen, Arcisstr.21,          "Extra Bavariam nulla vita,
+ 8000 Muenchen 2, Germany             et si est, non est ita." (Aventinus)
+

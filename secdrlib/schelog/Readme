@@ -1,0 +1,61 @@
+;;;                            schelog
+;;;                 An Embedding of Prolog in Scheme
+;;;          Written by Dorai Sitaram, Rice University, 1989
+;;;     Permission is granted for unrestricted non-commercial use
+
+Installing schelog:
+
+schelog, the Prolog-in-Scheme provided here, is written in Ch*z
+Scheme.  The code is mostly RRRS-compatible. Deviations include the
+use of extend-syntax, the syntactic definition facility, which is
+easily obtained, the box (called ref in some Schemes) data structure
+used for logic variables, and printf for formatted output.  The form
+recur is Ch*z's named let. (I would suggest defining these as
+utilities in your Scheme if they aren't already available.)  A
+reasonably competent Schemer should be able to fix those parts which
+cause trouble in his/her particular brand of Scheme, even without
+understanding what the code is doing.  If you have problems, send me
+email at dorai@rice.edu.  (You want to know my gripe about RRRS: it's
+a standard all right, but it manages to be so by just plain refusing
+to talk about several things, like macros. :-[)
+
+The makefile assumes you have Ch*z Scheme.  If so, perform a "make" to
+get the compiled versions {schelog.so, bagof.so} of the files
+{schelog.ss, bagof.ss}. Otherwise, ignore the makefile; you're then
+forced to use the uncompiled *.ss files, which should be fine, if
+slow.
+
+You are allowed to make any changes you want to this implementation.
+You may want to drop me a note though!
+
+Using schelog:
+
+Loading schelog.so (schelog.ss) followed by bagof.so (or bagof.ss) in
+your Scheme session gives you the Prolog embedding.  Some details
+about syntax are given in the file called Usage.
+
+The shell script "schelog" simply makes use of the command-line
+loading facility of Ch*z. Insert the required change in the name of
+the directory in the sbin= line. If your Scheme doesn't have the
+command-line loading ability, just ignore this script, and use schelog
+as in previous paragraph.
+
+The implementation consists of the files schelog.ss and bagof.ss
+(only).  The other (code) files are example files, most of the
+examples coming from Shapiro and Sterling's book, _The Art of Prolog_.
+The examples should give some clue about the writing and running of
+Prolog programs in this implementation.  Enjoy.  If you encounter
+problems and/or bugs, send email.
+
+It is beyond the scope of this documentation to tell you _how_ the
+implementation works.  Reading the code may be useful (!?), but the
+following references should be a better guide to a big part of at
+least one of the implementation files.
+
+Literature:
+
+Christopher Haynes, Logic Continuations. J. Logic Program. 4, 1987,
+157-176.
+
+Matthias Felleisen, Transliterating Prolog into Scheme, Tech. Rep.
+182, Indiana Univ. Comp. Sci. Dept., 1985.

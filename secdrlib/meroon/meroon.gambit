@@ -1,0 +1,123 @@
+;;; $Id: meroon.gambit,v 1.1 1992/10/20 19:01:37 queinnec Exp $
+;;; Copyright (c) 1990, 91, 92 by Christian Queinnec. All rights reserved.
+
+;;;                            *******************************
+;;;                            Gambit Adaptation for Meroon
+;;;                            *******************************
+
+;;; This file contains the necessary adaptation to be interpreted by Gambit.
+;;;  (load "meroon.gambit")
+;;;  (load "meroon.scm")
+
+;;; This program is distributed in the hope that it will be useful.
+;;; Use and copying of this software and preparation of derivative works
+;;; based upon this software are permitted, so long as the following
+;;; conditions are met:
+;;;      o credit to the authors is acknowledged following current
+;;;        academic behaviour
+;;;      o no fees or compensation are charged for use, copies, or
+;;;        access to this software
+;;;      o this copyright notice is included intact.
+;;; This software is made available AS IS, and no warranty is made about 
+;;; the software or its performance. 
+
+;;; Bug descriptions, use reports, comments or suggestions are welcome.
+;;; Send them to    
+;;;   <queinnec@polytechnique.fr>   or to:   <Christian.Queinnec@inria.fr>
+;;;                                 or to:
+;;;   Christian Queinnec                     Christian Queinnec
+;;;   Laboratoire d'Informatique de l'X      INRIA -- Rocquencourt
+;;;   Ecole Polytechnique                    Domaine de Voluceau, BP 105
+;;;   91128 Palaiseau                        78153 Le Chesnay Cedex
+;;;   France                                 France
+
+;;;************************************************
+;;;    Small, Efficient and Innovative Class System
+;;;       Christian Queinnec  
+;;;   \'Ecole Polytechnique & INRIA-Rocquencourt
+;;;************************************************
+
+(define call/cc call-with-current-continuation)
+
+(define (flat l)
+  (define (flatten l r)
+    (cond ((pair? l)
+           (flatten (car l) (flatten (cdr l) r)) )
+          ((null? l) r)
+          (else (cons l r)) ) )
+  (flatten l '()) )
+
+(##define-macro (define-oo-macro call . body)
+  `(##define-macro ,call 
+     ;;(display (list 'expanding (list ',(car call) . ,(flat (cdr call)))))
+     ;;(newline)
+     . ,body ) )
+
+(define-oo-macro (oo-apply fn arg . rest)
+   `(apply ,fn ,arg . ,rest) )
+
+(define-oo-macro (unless condition . body)
+  `(if ,condition #f (begin . ,body)) )
+
+(define-oo-macro (when condition . body)
+  `(if ,condition (begin . ,body)) )
+
+(define-oo-macro (oo-set! name form)
+  `(set! ,name ,form) )
+
+;;; redefine let* since gambit prevents to write 
+;;; (let* ((v 1)(v 2)) ...)
+(define-oo-macro (let* bindings . body)
+  (if (pair? bindings)
+      `(let (,(car bindings)) (let* ,(cdr bindings) . ,body))
+      `(begin . ,body) ) )
+
+(define (last-pair l)
+  (if (pair? l)
+      (let scan ((cdrl (cdr l)) (result l))
+        (if (pair? cdrl)
+            (scan (cdr cdrl) cdrl)
+            result ) )
+      (oo-error 'last-pair "Not a pair" l) ) )
+
+(define (remove item list)
+  (if (pair? list)
+      (if (equal? item (car list))
+          (cdr list)
+          (cons (car list) (remove item (cdr list))) )
+      list ) )
+
+(define (oo-concat . names)
+  (string->symbol
+   (apply string-append
+          (map (lambda (thing)
+                    (cond ((symbol? thing)
+                            (symbol->string thing) )
+                          ((string? thing) thing)
+                          ((number? thing)
+                           (number->string thing) )
+                          (else (oo-error 'oo-concat
+                                           "non coercible to String"
+                                          thing )) ) )
+                  names ) ) ) )
+
+(define (mapcan f l)
+  (if (pair? l)
+      (append (f (car l)) (mapcan f (cdr l)))
+      '() ) )
+
+(define (every? p . args)
+  (let andmap ((args args) (value #t))
+    (if (let any-at-end? ((ls args))
+          (and (pair? ls)
+               (or (not (pair? (car ls)))
+                   (any-at-end? (cdr ls)))))
+        value
+        (let ((value (apply p (map car args))))
+          (and value (andmap (map cdr args) value))))))
+
+(define oo-error   
+  (lambda (within msg . culprits)
+    (error 'Meroon msg) ) )
+
+;;; End of adaptation of Meroon for Gambit.

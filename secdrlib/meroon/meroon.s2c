@@ -1,0 +1,126 @@
+;;; $Id: meroon.s2c,v 2.5 1992/09/19 15:07:00 queinnec Exp $
+;;; Copyright (c) 1990, 91, 92 by Christian Queinnec. All rights reserved.
+
+;;;                            *******************************
+;;;                            Scheme->C Adaptation for Meroon
+;;;                            *******************************
+
+;;; This file contains the necessary adaptation for Scheme->C
+;;; Meroon can be interpreted or compiled.
+;;; To interpret Meroon, just load this file then the meroon file
+;;;     (loadq "meroon.s2c")
+;;;     (loadq "meroon.scm")
+;;; To compile it, you must load these two files under the compiler
+;;; while compiling meroon.scm. Yes, this is tricky but feasible.
+;;; Look at the meroon.sc file for further details.
+
+;;; This program is distributed in the hope that it will be useful.
+;;; Use and copying of this software and preparation of derivative works
+;;; based upon this software are permitted, so long as the following
+;;; conditions are met:
+;;;      o credit to the authors is acknowledged following current
+;;;        academic behaviour
+;;;      o no fees or compensation are charged for use, copies, or
+;;;        access to this software
+;;;      o this copyright notice is included intact.
+;;; This software is made available AS IS, and no warranty is made about 
+;;; the software or its performance. 
+
+;;; Bug descriptions, use reports, comments or suggestions are welcome.
+;;; Send them to    
+;;;   <queinnec@polytechnique.fr>   or to:   <Christian.Queinnec@inria.fr>
+;;;                                 or to:
+;;;   Christian Queinnec                     Christian Queinnec
+;;;   Laboratoire d'Informatique de l'X      INRIA -- Rocquencourt
+;;;   Ecole Polytechnique                    Domaine de Voluceau, BP 105
+;;;   91128 Palaiseau                        78153 Le Chesnay Cedex
+;;;   France                                 France
+
+;;;************************************************
+;;;    Small, Efficient and Innovative Class System
+;;;       Christian Queinnec  
+;;;   \'Ecole Polytechnique & INRIA-Rocquencourt
+;;;************************************************
+
+(define call/cc call-with-current-continuation)
+
+(define-macro define-oo-macro
+  (lambda (e m)
+    (define (map-arguments variables parameters)
+      (cond ((pair? variables)
+             (cons `( ,(car variables) (car ,parameters) )
+                   (map-arguments (cdr variables) `(cdr ,parameters)) ) )
+            ((symbol? variables)
+             (list `( ,variables ,parameters )) )
+            ((null? variables) '()) ) )
+    (if (getprop 'define-pervasive-macro 'loaded)
+        ;; My pervasive macro pakage is there so use it
+        (begin 
+          ;; but retrofit define-oo-macro into it
+          (putprop 'define-oo-macro 'scc
+                   (cons (cons 'macro (getprop 'define-oo-macro '*expander*))
+                         (or (getprop 'define-oo-macro 'scc)
+                             '() ) ) )
+          ;(format stderr-port "[define macro ~A.]~%" (cadr e))
+          ;(read-eval-print)
+          (m `(define-pervasive-macro . ,(cdr e)) m) )
+        (let* ((call (cadr e))
+               (body (cddr e))
+               (s2c-expander `(lambda (e m)
+                                (m (let ,(map-arguments (cdr call) '(cdr e))
+                                     . ,body ) m) )) )
+          (m `(define-macro ,(car call) ,s2c-expander) m) ) ) ) )
+
+(define gensym
+  (let ((counter 99))
+    (lambda args
+      (set! counter (+ counter 1))
+      (oo-concat (if (pair? args) (car args) 'G)
+              counter ) ) ) )
+
+(define (oo-concat . names)
+  (string->symbol
+   (apply string-append
+          (map (lambda (thing)
+                    (cond ((symbol? thing) 
+                           (symbol->string thing) )
+                          ((string? thing) thing)
+                          ((number? thing)
+                           (number->string thing) )
+                          (else (error "non coercible to String"
+                                        thing )) ) )
+                  names ) ) ) )
+
+(define (flat l)
+  (define (flatten l r)
+    (cond ((pair? l)
+           (flatten (car l) (flatten (cdr l) r)) )
+          ((null? l) r)
+          (else (cons l r)) ) )
+  (flatten l '()) )
+
+(define (mapcan f l)
+  (if (pair? l)
+      (append (f (car l)) (mapcan f (cdr l)))
+      '() ) )
+
+(define (every? p . args)
+  (let andmap ((args args) (value #t))
+    (if (let any-at-end? ((ls args))
+          (and (pair? ls)
+               (or (not (pair? (car ls)))
+                   (any-at-end? (cdr ls)))))
+        value
+        (let ((value (apply p (map car args))))
+          (and value (andmap (map cdr args) value))))))
+
+(define oo-apply apply)
+
+(define oo-error 
+  (lambda (within msg . culprits)
+    (error 'Meroon msg) ) )
+
+(define-oo-macro (oo-set! variable form)
+  `(set! ,variable ,form) )
+
+;;; End of adaptation of Meroon for Scheme->C.

@@ -1,0 +1,556 @@
+\section{SECDRマシンについて}
+\subsection{仮想マシンの概要}
+\medskip
+\par
+本Schemeの処理系では、Schemeのプログラムは仮想マシンの機械語にコンパイルされ
+てから、仮想マシンによって実行が行なわれます。ここでは主に、この仮想マシンに
+ついて述べることにします。
+\medskip
+\par
+一般に関数型言語の実現モデルは、環境スタックモデル, データフローモデル, リダ
+クションモデル等に分類することができます。
+\medskip
+\par
+環境スタックモデルは、変数の結合情報と実行順序の情報を"環境"として実現し、関
+数の実行順序に従って環境をスタックすることにより、関数型言語の実行メカニズム
+を実現する計算モデルです。そのよく知られた代表的な例の一つとしてSECDマシンが
+あります。
+\medskip
+\par
+そしてSECDR-Schemeの仮想マシンは、その名前からも容易に想像できますように、こ
+のSECDマシンの変形の一つです。
+\medskip
+\par
+環境スタックマシンはハードウェアスタックや関数型言語向きのスタック操作命令な
+どを用意することにより関数型言語の実行を高速化する計算機です。この環境スタッ
+クマシンでは、スタックを用いることにより、変数の結合環境や実行情報を効率よく
+管理することができます。しかし、関数の並列実行や、遅延評価、高階関数機能の実
+現に対しては必ずしも効率的なものではありません。
+\medskip
+\par
+環境スタックマシンの上述の欠点に対して有効なものとして、例えばLazyML等のイン
+プリメントに用いられているG-マシンがあります。G-マシンはリダクションモデルの
+一つであり、SGCDマシンと呼ばれることもあります。つまりSECDマシンのE(環境)の
+代わりにG(グラフ)を持ち、グラフリダクションを行なうマシンです。
+\medskip
+\par
+さて、ここではSECDR-Schemeに直接関係する環境スタックモデルのSECD(SECDR)マシ
+ンについてのみ簡単に解説することにしますので、グラフリダクションやその実装等
+にも興味をお持ちになったら、例えば\cite{Jones}等をお読みになって下さい。
+\medskip
+\medskip
+\par
+最初にSECDマシンの歴史を簡単に振り返っておきましょう。
+\medskip
+\par
+Peter Landinは彼の初期の論文で、λ算法と機械および高水準言語(特にALGOL60)と
+の関係を論じています。そしてSECDと呼ぶ抽象機械によって式の評価をどの様に機械
+的に行うのかを述べています。1966年にLandinは一つの言語(の一族)Iswim(If You
+See What I Meanの略)を導入し、数多くの重要な構文上の考え方、意味上の考え方を
+示しました。つまりSECD機械は、Landinが意味論上の革新に対する功績の中で、関数
+プログラムを実行するための単純な抽象機械として提示したものです。
+\medskip
+\par
+その後Peter HendersonがLispkit Lisp(中置演算子と代数的な構文を持った純正Lisp
+の一つ)のインプリメントのために、やや変形したものですが、このSECDマシンを用
+いています。Hendersonの著書\cite{Henderson}には、SECDマシンの解説と実装法が
+詳しく解説されています。従ってSECDマシンについて詳細を知りたい方は、この著書
+を読まれると良いでしょう。
+\medskip
+\par
+そして、このSECDR-Schemeの仮想マシンであるSECDRマシンは、このHendersonの示し
+たSECDマシンに基づいて作成されたものです。しかし、主に末尾再帰に対処するため
+に、マシンのいくつかの状態遷移は異なったものとなっています。つまり、さらに変
+形したものの一つとなっているということです。
+\medskip
+\par
+ようするに、そもそもこのSECDRマシンの最初の原型であるSECDマシンは、Landinに
+よって関数型言語Iswimやそれらの形式的な操作的意味論のために考案された抽象機
+械であったものです。そしてSECDR-Schemeの処理系は、操作的意味を与えるこの抽象
+機械がそのまま動いているようなものです。(Schemeの表示的意味は、その一つの仕
+様書であるR4RSにおいて形式的に与えられています。)
+\medskip
+\medskip
+\subsection{SECDRマシンのアーキテクチャ}
+\medskip
+\par
+SECDRマシンは、以下のように５つのレジスタを持つ環境スタックマシンです。
+\medskip
+\par
+---------------------------------------------------------------\\
+\begin{description}
+\item[S:]stack
+\par
+式の値を計算する時の中間結果を入れる。
+\item[E:]environment
+\par
+計算の途中で各変数に束縛される値を入れる。
+\item[C:]control list
+\par
+実行されるべき機械語プログラムを入れる。
+\item[D:]dump
+\par
+新しい関数呼び出しが起こった時に他のレジスタの内容をしまっておく。
+スタックの一種。
+\item[R:]return
+\par
+戻り値を格納する。
+\end{description}
+\par
+---------------------------------------------------------------\\
+\medskip
+\par
+SECDRマシンの19個の命令と各々の状態遷移を、以下の表に示します。説明不足で理
+解できない部分があるかも知れませんが、その場合は上述の\cite{Henderson}を参
+考にして下さい。
+\medskip
+\par
+---------------------------------------------------------------\\
+\begin{description}
+\item[LD:]\#0
+\baselineskip=10pt
+\begin{verbatim}
+S E (LD (i . j) . C) D R ==> S E C D r
+ where r = (list-ref (list-ref E i) j)
+\end{verbatim}
+\medskip
+\item[TLD:]\#1
+\baselineskip=10pt
+\begin{verbatim}
+S E (TLD (i . j) . C) D R ==> S E C D r
+ where r = (list-tail (list-ref E i) j)
+\end{verbatim}
+\medskip
+\item[GLD:]\#2
+\baselineskip=10pt
+\begin{verbatim}
+S E (GLD sym . C) D R ==> S E C D r
+ where r = gloabl value of sym
+\end{verbatim}
+\medskip
+\item[LDC:]\#3
+\baselineskip=10pt
+\begin{verbatim}
+S E (LDC const . C) D R ==> S E C D const
+\end{verbatim}
+\medskip
+\item[LDF:]\#4
+\baselineskip=10pt
+\begin{verbatim}
+S E (LDF code . C) D R
+      ==> S E C D (closure of code and E)
+\end{verbatim}
+\medskip
+\item[AP:]\#5
+\baselineskip=10pt
+\begin{verbatim}
+(args . S) E (AP . C) D op ==>
+\end{verbatim}
+\begin{description}
+\item[case:]op is closure
+\baselineskip=10pt
+\begin{verbatim}
+() (args . env) code (S E C . D) NIL
+where code is closure code of op and
+env is closure environment of op.
+\end{verbatim}
+\item[case:]op is primivite procedure
+\baselineskip=10pt
+\begin{verbatim}
+First, execute primitive procedure op 
+with arguments args and set registers 
+to S E C D r, where r is the return
+value of primitine procedure op.
+\end{verbatim}
+\item[case:]op is continuation
+\baselineskip=10pt
+\begin{verbatim}
+s e c d r
+where r is first element of args and
+s e c d are saved registers in op.
+\end{verbatim}
+\medskip
+\end{description}
+\item[TAP:]\#6
+\baselineskip=10pt
+\begin{verbatim}
+(args . S) E (TAP . C) D op ==>
+\end{verbatim}
+\begin{description}
+\item[case:]op is closure
+\baselineskip=10pt
+\begin{verbatim}
+() (args . env) code D NIL
+where code is closure code of op and
+env is closure environment of op.
+\end{verbatim}
+\item[case:]op is primivite procedure
+\baselineskip=10pt
+\begin{verbatim}
+First, execute primitive procedure op 
+with arguments args and set registers 
+to S E C D r, where r is the return
+value of primitine procedure op.
+\end{verbatim}
+\item[case:]op is continuation
+\baselineskip=10pt
+\begin{verbatim}
+s e c d r
+where x is the first element of args 
+and s e c d r are saved registers in 
+op.
+\end{verbatim}
+\medskip
+\end{description}
+\item[PUSH:]\#7
+\baselineskip=10pt
+\begin{verbatim}
+S E (PUSH . C) D R ==> (R . S) E C D R
+\end{verbatim}
+\medskip
+\item[RTN:]\#8
+\baselineskip=10pt
+\begin{verbatim}
+S E (RTN . C) (s e c . d) R ==> s e c d R
+\end{verbatim}
+\medskip
+\item[SEL:]\#9
+\baselineskip=10pt
+\begin{verbatim}
+S E (SEL ct cf . C) D test
+            ==> S E cx (S E C . D) test
+        where cx = (if test ct cf)
+\end{verbatim}
+\medskip
+\item[TSEL:]\#10
+\baselineskip=10pt
+\begin{verbatim}
+S E (TSEL ct cf . C) D test
+            ==> S E cx D test
+        where cx = (if test ct cf)
+\end{verbatim}
+\medskip
+\item[ASSIG:]\#11
+\baselineskip=10pt
+\begin{verbatim}
+S E (ASSIG (i . j) . C) D R ==> S E' C D R
+ where E' is made by
+  (set-car! (list-tail (list-ref E i) j) R)
+\end{verbatim}
+\medskip
+\item[TASSIG:]\#12
+\baselineskip=10pt
+\begin{verbatim}
+S E (TASSIG (i . j) . C) D R ==> S E' C D R
+ where E' is made by
+   (if (zero? j)
+     (set-car! (list-tail E i) R)
+     (set-cdr! (list-tail (list-ref E i)
+                          (- j 1)) R))
+\end{verbatim}
+\medskip
+\item[GASSIG:]\#13
+\baselineskip=10pt
+\begin{verbatim}
+S E (GASSIG sym . C) D R ==> S E C D R
+ where global value of sym = R
+\end{verbatim}
+\medskip
+\item[DEF:]\#14
+\baselineskip=10pt
+\begin{verbatim}
+S E (DEF sym . C) D R ==> S E C D sym
+ where global value of sym = R
+\end{verbatim}
+\medskip
+\item[PUSHCONS:]\#15
+\baselineskip=10pt
+\begin{verbatim}
+(s . S) E (PUSHCONS . C) D R
+            ==> ((R . s) . S) E C D R
+\end{verbatim}
+\medskip
+\item[SAVE:]\#16
+\baselineskip=10pt
+\begin{verbatim}
+S E (SAVE C1 . C2) D R
+            ==> S E C1 (S E C2 . D) R
+\end{verbatim}
+\medskip
+\item[EXEC:]\#17
+\baselineskip=10pt
+\begin{verbatim}
+S E (EXEC . C) D code
+        ==> NIL NIL code (S E C . D) NIL
+\end{verbatim}
+\medskip
+\item[STOP:]\#18
+\baselineskip=10pt
+\begin{verbatim}
+S E (STOP . C) D R ==> Stop SECDR execution
+\end{verbatim}
+\end{description}
+\par
+---------------------------------------------------------------\\
+\medskip
+\par
+参考までに以下にHendersonのSECDマシンの状態遷移も示しておきます。
+\medskip
+\par
+---------------------------------------------------------------\\
+\begin{description}
+\item[LD:]load
+\baselineskip=10pt
+\begin{verbatim}
+S E (LD i . C) D --> (x . S) E C D
+                   where x=locate(i, e)
+\end{verbatim}
+\medskip
+\item[LDC:]load constant
+\baselineskip=10pt
+\begin{verbatim}
+S E (LDC x . C) D --> (x . S) E C D
+\end{verbatim}
+\medskip
+\item[LDF:]load function
+\baselineskip=10pt
+\begin{verbatim}
+S E (LDF C' . C) D --> ((C' . E) . S) E C D
+\end{verbatim}
+\medskip
+\item[AP:]apply function
+\baselineskip=10pt
+\begin{verbatim}
+((C' . E') v . S) E (AP . C) D
+            --> NIL (v . E') C' (S E C . D)
+\end{verbatim}
+\medskip
+\item[RTN:]return
+\baselineskip=10pt
+\begin{verbatim}
+(x) E' (RTN) (S E C . D) --> (x . S) E C D
+\end{verbatim}
+\medskip
+\item[DUM:]create dummy environment
+\baselineskip=10pt
+\begin{verbatim}
+S E (DUM . C) D --> S (O . E) C D
+\end{verbatim}
+\medskip
+\item[RAP:]recursive apply
+\baselineskip=10pt
+\begin{verbatim}
+((C' . E') v . S) (O . E) (RAP . C) D
+      --> NIL rplaca(E', v) C' (S E C . D)
+\end{verbatim}
+\medskip
+\item[SEL:]select subcontrol
+\baselineskip=10pt
+\begin{verbatim}
+(x . S) E (SEL cT cF . C) D
+                --> S E Cx (C . D)
+\end{verbatim}
+\medskip
+\item[JOIN:]rejoin main control
+\baselineskip=10pt
+\begin{verbatim}
+S E (JOIN) (C . D) --> S E C D
+\end{verbatim}
+\medskip
+\item[CAR:]~
+\baselineskip=10pt
+\begin{verbatim}
+((a . b) . S) E (CAR . C) D
+                --> (a . S) E C D
+\end{verbatim}
+\medskip
+\item[CDR:]~
+\baselineskip=10pt
+\begin{verbatim}
+((a . b) . S) E (CDR . C) D
+                --> (b . S) E C D
+\end{verbatim}
+\medskip
+\item[ATOM:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a . S) E (ATOM . C) D --> (t . S) E C D
+\end{verbatim}
+\medskip
+\item[CONS:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (CONS . C) D
+                --> ((a . b) . S) E C D
+\end{verbatim}
+\medskip
+\item[EQ:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (EQ . C) D
+                --> (b=a . S) E C D
+\end{verbatim}
+\medskip
+\item[ADD:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (ADD . C) D
+                --> (b+a . S) E C D
+\end{verbatim}
+\medskip
+\item[SUB:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (SUB . C) D
+                --> (b-a . S) E C D
+\end{verbatim}
+\medskip
+\item[MUL:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (MUL . C) D
+                --> (b*a . S) E C D
+\end{verbatim}
+\medskip
+\item[DIV:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (DIV . C) D
+                --> (b/a . S) E C D
+\end{verbatim}
+\medskip
+\item[REM:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (REM . C) D
+                --> (b rem a . S) E C D
+\end{verbatim}
+\medskip
+\item[LEQ:]~
+\baselineskip=10pt
+\begin{verbatim}
+(a b . S) E (LEQ . C) D
+                --> (b=<a . S) E C D
+\end{verbatim}
+\medskip
+\item[STOP:]~
+\baselineskip=10pt
+\begin{verbatim}
+S E (STOP) D --> S E (STOP) D
+\end{verbatim}
+\end{description}
+\par
+---------------------------------------------------------------\\
+\medskip
+\medskip
+\subsection{SECDRマシンのSchemeからの操作}
+\medskip
+\par
+SECDR-SchemeのコンパイラはScheme自身で書かれています。またコンパイル結果であ
+る中間コードは、テキストファイルになります。ディスアセンブラも含まれています
+ので、コンパイル結果を容易に理解することができるでしょう。
+\medskip
+\par
+ところで、直接この中間コードをテキストで入力し、実行することもできます。また
+MANUALの方にも記述しましたように、本処理系では仮想マシンはMasterとSlaveの2台
+が存在します。そしてMasterのマシンは、エラーやインタラプトが発生した場合には、
+その状態を保存したまま停止します。そしてSlaveのマシンが動き出しますので、
+Slave側からMasterのレジスタを参照したり変更したりすることができます。
+(Init.scmのerror hookの関数を参考にして下さい。)
+これらの操作は注意深く行なうことが必要ですが、試してみると仮想マシンに何が起
+こるのか良くわかるはずです。
+\medskip
+\par
+以下に例を示します。
+\medskip
+\medskip
+\begin{nquote}{1ex}
+\baselineskip=10pt
+\begin{verbatim}
+> (define code
+    (compile
+     '(define (fact n)
+        (if (zero? n)
+            1
+            (* n (fact (1- n)))))))
+; Evaluation took 0.049998 Seconds (0 in gc).
+code
+> code
+; Evaluation took 0 Seconds (0 in gc).
+(#4 (#3 () #7 #0 (0 . 0) #15 #2 zero? #5 #10
+ (#3 1 #8) (#3 () #7 #3 () #7 #3 () #7 #0
+  (0 . 0) #15 #2 1- #5 #15 #2 fact #5 #15 #0
+  (0 . 0) #15 #2 * #6 #8) #8) #14 fact #8)
+> (disassemble code)
+\end{verbatim}
+\end{nquote}
+\medskip
+\begin{nquote}{2ex}
+\baselineskip=10pt
+\begin{verbatim}
+************ DisAssemble Code ************
+
+  (
+  LDF       (
+      LDC       ()
+      PUSH
+      LD        (0 . 0)
+      PUSHCONS
+      GLD       zero?
+      AP
+      TSEL      (
+          LDC       1
+          RTN
+          )
+          (
+          LDC       ()
+          PUSH
+          LDC       ()
+          PUSH
+          LDC       ()
+          PUSH
+          LD        (0 . 0)
+          PUSHCONS
+          GLD       1-
+          AP
+          PUSHCONS
+          GLD       fact
+          AP
+          PUSHCONS
+          LD        (0 . 0)
+          PUSHCONS
+          GLD       *
+          TAP
+          RTN
+          )
+      RTN
+      )
+  DEF       fact
+  RTN
+  )
+************ END DisAssemble ************
+
+; Evaluation took 0.116662 Seconds (0 in gc).
+
+> (exec code)
+; Evaluation took 0.016666 Seconds (0 in gc).
+fact
+> (fact 5)
+; Evaluation took 0 Seconds (0 in gc).
+120
+
+> (compile '(lambda (m n)(+ m n)))
+; Evaluation took 0.033332 Seconds (0 in gc).
+(#4 (#3 () #7 #0 (0 . 1) #15 #0 (0 . 0) #15
+  #2 + #6 #8) #8)
+> ((lambda (m n)(+ m n)) 3 2)
+; Evaluation took 0.016666 Seconds (0 in gc).
+5
+> ((exec '(#4 (#3 () #7 #0 (0 . 1) #15 #0
+           (0 . 0) #15 #2 + #6 #8) #8)) 3 2)
+; Evaluation took 0.033332 Seconds (0 in gc).
+5
+\end{verbatim}
+\end{nquote}
+\medskip
+\medskip

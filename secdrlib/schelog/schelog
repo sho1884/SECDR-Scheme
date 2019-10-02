@@ -1,0 +1,9 @@
+#! /bin/sh
+
+# Change *.so to *.ss if you can't compile-file your files.
+# Change the sbin= line to contain the appropriate directory (i.e.,
+# the one containing schelog.s[so] and bagof.s[so].
+
+sbin=/titan/dorai/scm/logic/ftp
+
+chez ${sbin}/schelog.so ${sbin}/bagof.so $*
