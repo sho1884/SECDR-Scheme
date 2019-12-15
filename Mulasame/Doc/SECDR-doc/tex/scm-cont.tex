@@ -1,0 +1,646 @@
+\section{Schemeにおける継続の応用}
+\label{sec:continuation}
+\medskip
+\par
+Schemeを学ぼうとする場合は、例えばAbelsonとSussmanによる「Structure and 
+Interpretation  of Computer Programs」\cite{bib:Structure}という良書があ
+るので、これを読まれるとよいと思う。しかし、この文献には継続についての
+解説がないので、以下では継続についてのみ解説することにする。
+以下に示したプログラムは、SECDR-Schemeでの実行を確認している。
+ただしSchemeの仕様書\cite{bib:Revised}では、まだマクロの仕様が正式には
+規定されていないので、マクロの仕様は処理系によって異なる。
+実際、SECDR-Schemeのマクロは仕様書\cite{bib:Revised}のappendixに記述さ
+れているものとは異なる。
+それゆえ、他の処理系を用いる場合にはマクロの仕様によって若干の手直しが
+必要となるかもしれないことを断っておく。（付録\ref{sec:app:flip}参照）
+\medskip
+
+\subsection{call-with-current-continuationの概要}
+\medskip
+\par
+\verb$(call-with-current-continuation proc)$
+\medskip
+\par
+procは1引数の手続きでなければならない。
+手続きcall-with-current-continuationは現在の継続をエスケープ手続きとして一まとめにし、
+procの引数として渡す。エスケープ手続きは1引数のScheme手続きで、もし後にある値を受け
+取ると、その後の時点に有効な継続を無視し、そのかわりにエスケープ手続きが作られたとき
+に有効であった継続にその値を渡す。
+\medskip
+\par
+call-with-current-continuationで作られたエスケープ手続きは、他のSchemeの手続きと
+まったく同様に無制限の動的存在範囲(extent)を持つ。それは変数や他のデータ構造に蓄え
+られてもよいし、望むかぎり多数回呼ぶこともできる。
+\medskip
+\par
+以下の例はcall-with-current-continuationのもっとも普通の使い方を示しているに過ぎない。
+もし実際のプログラムがこれらの例ほど単純ならば、call-with-current-continuationほどの
+能力を持った手続きは必要ない。
+\medskip
+\par
+\begin{例}
+~\\
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(call-with-current-continuation
+    (lambda (exit)
+        (for-each (lambda(x)
+            (if (negative? x)
+                (exit x)))
+            '(54 0 37 -3 245 19))
+    #t))                    ==>  -3
+\end{verbatim}
+\end{nquote}
+\medskip
+\end{例}
+\par
+\begin{例}
+~\\
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define list-length (lambda (obj)
+  (call-with-current-continuation
+    (lambda (return)
+      (letrec ((r
+          (lambda (obj)
+             (cond ((null? obj) 0)
+                   ((pair? obj)
+                    (+ (r (cdr obj)) 1))
+                   (else (return #f))))))
+          (r obj))))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(list-length '(1 2 3 4))     ==>  4
+(list-length '(a b . c))     ==>  #f
+\end{verbatim}
+\end{nquote}
+\medskip
+\end{例}
+\par
+call-with-current-continuationの一般的な使い方は、構造的なループや手続き本体からの
+非局所的な抜け出しである。しかし、call-with-current-continuationは、もっと広い範囲の
+高度な制御構造を実現するのに非常に有用である。
+Scheme式が評価されるときはいつでも式の結果を要求している継続(continuation)が存在する。
+継続は計算の総ての(デフォルトの)未来を表している。例えば式がトップレベルで評価されるならば、
+その継続は結果を受け取り,それをスクリーンに印字し,次の入力を待ち,さらにそれを評価する
+ことを永久に続けるであろう。多くの場合、継続はユーザのコードで指定された動きを含んでいる。
+通常の場合、これらの偏在する継続は背景に隠れていて、プログラマはそれらのことをあまり
+考えなくてもよい。しかしながら、まれにプログラマは継続を明示的に取り扱う必要があるかも
+しれない。 call-with-current-continuationは現在の継続と同じように働く手続きを作ることに
+よって、この操作をプログラマに許す。
+\medskip
+\par
+多くのプログラミング言語はexit,return,またはgotoという一つ以上の特殊目的のエスケープ
+機構を取り入れている。しかしながら、1965年にPeter LandinはJ-operaterという汎用の
+エスケープ操作を発明した。John Reynoldsはより単純で同程度に強力な機構を1972年に示した。
+1975年のSussmanとSteeleによるSchemeの論文に述べられているcatch機構はReynoldsの機構と
+全く同じである。数人のSchemeのインプリメンタはcatch機構の全能力は特殊構文の機構の
+代わりに手続きによって備えることができることを紹介し、名前call-with-current-continuation
+が1982年に作られた。この名前は説明的であるが、そのように長い名前の効用についての見解は
+別れており、ある人々は名前call/ccを使用する。
+\medskip
+\par
+\begin{例}[階乗を計算するプログラム]
+~\\
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (fact n)
+  (let ((ans 1)
+        (pitch nil))
+    (let ((w (call/cc
+                (lambda (-c-)
+                    (set! pitch -c-)
+                    n))))
+        (cond ((= w 0) ans)
+              (else (set! ans (* ans w))
+                    (pitch (-1+ w)))))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\end{例}
+\par
+よく用いる技法として、\verb$current-continuation$を以下のように定義しておけば、その時点での
+継続を取り出すことができる。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define identity (lambda (x) x))
+\end{verbatim}
+\end{nquote}
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (current-continuation)
+    (call-with-current-continuation
+    identity))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+この\verb$current-continuation$を用いると、\verb$fact$は次のように定義することができる。
+\medskip
+\par
+\begin{例}
+~\\
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (fact n)
+  (let ((ans 1))
+    (let ((pitch (current-continuation)))
+        (cond ((= n 0) ans)
+              (else (set! ans (* ans n))
+                    (set! n (-1+ n))
+                    (pitch pitch))))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+ここで\verb$(pitch pitch)$は、自分の継続を再び自分自身に束縛している。
+\medskip
+\end{例}
+\medskip
+
+\subsection{簡単な応用例}
+\par
+ここではCommon Lispの\verb$block$, \verb$return-from$, \verb$catch$, \verb$throw$を
+\verb$call-with-current-continuation$を用いて定義してみることにする。
+\medskip
+
+\subsubsection{blockとreturn-fromの定義}
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(macro block (lambda (l)
+    (let ((name (cadr l))
+          (forms (cddr l)))
+        `(call-with-current-continuation
+             (lambda (,name) ,@forms)))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(macro return-from (lambda (l)
+    (let ((name (cadr l))
+          (value (caddr l)))
+        `(,name ,value))))
+\end{verbatim}
+\end{nquote}
+\medskip
+
+\subsubsection{catchとthrowの定義}
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (make-stack)
+    (define s '())
+    (define (push x)
+        (set! s (cons x s)))
+    (define (pop)
+        (if (null? s)
+            (error "Empty stack -- POP")
+            (let ((top (car s)))
+                (set! s (cdr s))
+                top)))
+    (define (empty?)
+        (null? s))
+    (define (print)
+        (write s))
+    (define (stack->list)
+        s)
+    (define (initialize)
+        (set! s '()))
+    (define (dispatch message)
+        (cond ((eq? message 'push) push)
+              ((eq? message 'pop) (pop))
+              ((eq? message 'empty?)
+               (empty?))
+              ((eq? message 'print)
+               (print))
+              ((eq? message 'stack->list)
+               (stack->list))
+              ((eq? message 'initialize)
+               (initialize))
+              (else
+               (error
+                "Unknown request -- STACK"
+                 message))))
+    dispatch)
+
+(define %catchers% (make-stack))
+
+(macro catch (lambda (l)
+    (let ((tag (cadr l))(forms (cddr l)))
+      `(call-with-current-continuation
+          (lambda (-c-)
+            ((%catchers% 'push)
+             (cons ,tag -c-))
+            (let ((ans (begin ,@forms)))
+               (%catchers% 'pop)
+               ans))))))
+
+(define (throw tag value)
+    (let ((continuation
+             (search-catcher tag)))
+        (continuation value)))
+
+(define (search-catcher tag)
+    (if (%catchers% 'empty?)
+        (error "Tag name not found:" tag)
+        (let ((ans (%catchers% 'pop)))
+            (if (eq? (car ans) tag)
+                (cdr ans)
+                (search-catcher tag)))))
+\end{verbatim}
+\end{nquote}
+\medskip
+
+\subsection{コルーチンの実現方法}
+\par
+call-with-current-continuationの機構を用いることによって、コルーチンを簡単に実現する
+ことができる。次に示す例はその実現方法を示唆するものである。
+\medskip
+\par
+\begin{例}
+~\\
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (print x)
+    (display x)
+    (newline))
+
+(define (bar)
+    (let ((qwe nil))
+        (print 'init)
+        (call/cc
+          (lambda (-c-) (set! qwe -c-)))
+            (print 'bar)
+            qwe))
+
+(define (foo)
+    (let ((qwe nil))
+        (set! qwe (bar))
+        (print 'foo)
+        (qwe nil)))
+
+ここで (foo) を実行すると
+init
+bar
+foo
+bar
+foo
+...
+となる。
+\end{verbatim}
+\end{nquote}
+\medskip
+\end{例}
+
+\subsection{非決定的基本演算と後戻りプログラム}
+\par
+McCarthyは次のような性質を持つ２項の非決定性の演算子を定義した。
+[McCarthy1963]
+\begin{eqnarray}
+  amb(e_{1}, \bot) & = & e_{1} \nonumber \\
+  amb(\bot, e_{2}) & = & e_{2} \nonumber \\
+  amb(e_{1}, e_{2}) & = & \mbox{非決定的に}e_{1}\mbox{か}e_{2}\mbox{を選ぶ} \nonumber
+\end{eqnarray}
+式$amb(e_{1}, e_{2})$を操作的に読むと、$e_{1}$と$e_{2}$を並列に評価して、早く
+返された方の値をこの式の値とするということである。
+\par
+SECDR-Schemeの附属のライブラリには、この$amb$の一つの変形が含まれている。
+以下はそのライブラリに関する説明である。
+\medskip
+\subsubsection{Schemeへの非決定性の導入}
+\par
+次の関数は、長さがnであるリストaのn+1箇所ある任意の位置に要素を差し込む関数である。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (insert x a)
+    (if (null? a)
+        (cons x ())
+        (amb (cons x a)
+             (cons (car a)
+                   (insert x (cdr a))))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+ここで、関数\verb$amb$は\verb$(amb exp1 exp2)$を評価すると、\verb$exp1$か\verb$exp2$の何れか一方を返す。
+\verb$exp1$と\verb$exp2$のどちらかではあるが、2つの値の何れであるかは定まらないものとする
+\footnote{\verb$exp1$と\verb$exp2$をそれぞれ計算し、次に硬貨を投げてその何れかを選択すると考えればよい。
+そうすると\verb$(- (amb 1 2) (amb 1 2))$は硬貨を2度投げたことになるので、0となるとは限らない
+ことに注意を要する。}。
+\medskip
+\par
+次に示す関数\verb$perm$は任意に並べ変えたリスト(任意の順列)を、また\verb$choice$は1からnまでの整数の
+中から任意の値を返す。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (perm b)
+    (if (null? b)
+        ()
+        (insert (car b) (perm (cdr b)))))
+
+(define (choice n)
+    (if (= n 1)
+        1
+        (amb n (choice (-1+ n)))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+次に\verb$(fail)$という式を導入する。プログラム(式)の評価の途中で、\verb$(fail)$という部分式を
+評価せずに済むような選択の系列があるならば、その選択の系列が実行されるものとする。
+\verb$amb$と\verb$fail$の意味は、次のように考えるとわかりやすい。まず\verb$amb$と\verb$fail$を含む
+プログラムを実行する抽象機械があるとする。この機械が\verb$(amb exp1 exp2)$という式の値の
+計算に出会うと、その機械は自分と全く同じ状態の機械のコピーを一つ作りだし、片方の機械
+には\verb$exp1$に出会ったのと同じように、他方の機械には\verb$exp2$に出会ったのと同じように計算を
+進めさせる。そしてどの機械も\verb$fail$に出会うとそこでその機械は捨てられてなくなると考える。
+\verb$amb$と\verb$fail$がどのように使われるかを8-QUEENのパズルを例にして説明する。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (attacks i j place)
+    (if (null? place)
+        #f
+        (let ((ii (caar place))
+              (jj (cdar place)))
+            (cond ((= i ii) #t)
+                  ((= j jj) #t)
+                  ((= (+ i j)
+                      (+ ii jj)) #t)
+                  ((= (- i j)
+                      (- ii jj)) #t)
+                  (else
+                    (attacks i j
+                      (cdr place)))))))
+
+(define (addqueen i n place)
+    (let ((j (choice n)))
+        (if (attacks i j place)
+            (fail)
+            (let ((newplace
+                   (cons (cons i j)
+                         place)))
+                (if (= i n)
+                    newplace
+                    (addqueen (1+ i) n
+                        newplace))))))
+
+(define (queen n)
+    (addqueen 1 n ()))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+ここで\verb$(attacks i j place)$は、女王の配置されているます目のリスト\verb$place$から、
+チェス盤の\verb$i$行\verb$j$列のます目に対し、この配置の中のどれかの女王が利いているときに
+限って真となる述語である。
+\medskip
+\par
+非決定性が何箇所かで導入されるような複雑な問題に対しては、非決定的な基本演算を用いて
+直接定式化する方が後戻りを陽にプログラミングするよりは確実に有利である。
+その有利さは、最も具合の良い選択がなされるものとして、勝手な選択をすると考えて良い点に
+由来する。
+\medskip
+
+\subsubsection{ambとfailの実現法}
+\medskip
+\par
+これまで\verb$amb$については、その意味を抽象機械が\verb$(amb exp1 exp2)$という式の値の計算に
+出会うと、自分と全く同じ状態の機械のコピーを一つ作り出すとしてきた。
+その場合、この二つの抽象的な機械は独立に並列に動作しても良いことになる。
+また、実際に並列に動作する機械が存在しなければ、ある特定の順序(スケジューリング)に
+従って逐次的にシミュレートすれば良い。
+ここではそのスケジューリングを\verb$exp1,exp2$の順に行い、また複数の非決定性が導入されて
+いる場合は、最も近く(最近)の選択をやり直すという規則とする。これは探索問題の解法として、
+横型探索ではなく縦型探索をする事に相当する。このようなスケジューリングをする事による
+欠点は、\verb$exp2$を選択すれば計算が停止するが、\verb$exp1$を選んだ場合に計算が終了しないと
+いった場合に、全体の計算が停止しないといった問題が起こり得ることである。
+\medskip
+\par
+さて、後に示すリストによる\verb$amb$の実現方法では、\verb$choice$は以下のように展開される。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (expand-choice n)
+  (if (= n 1)
+      1
+      (call-with-current-continuation
+        (lambda (-c-)
+          ((%amb-catchers-stack% 'push)
+           (cons -c-
+             (delay
+               (expand-choice (-1+ n)))))
+          n))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+もしも、\verb$choice$を以下のように定義したとすると、全ての可能な継続点を計算した後に
+実行に入ることになる。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (choice n)
+    (if (= n 1)
+        1
+        (amb (choice (-1+ n)) n)))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+この場合に気をつけなければならないことは、可能な場合が有限でなければならないということ
+である。例えば任意の0以上の整数を返す関数を考えてみることにする。このような無限に
+可能な継続点が存在する場合には、以下に示す\verb$any-numbe1$の定義であれば他の部分の計算が
+進むが、\verb$any-number2$の定義を用いると全ての可能な環境を計算し続けるだけで、他の部分の
+計算は永久に遅らされる。これはPrologにおける左再帰の問題とよく似ている。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (any-number1)
+    (amb 0 (1+ (any-number1))))
+(define (any-number2)
+    (amb (1+ (any-number2)) 0))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+以上述べてきたような制約はあるものの、\verb$amb$と\verb$fail$は
+\verb$call-with-current-continuation$を
+用いて、以下のように定義することができる。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define %amb-catchers-stack% (make-stack))
+
+(macro amb (lambda (l)
+  (let ((exp1 (cadr l))(exp2 (caddr l)))
+    `(call-with-current-continuation
+       (lambda (-c-)
+          ((%amb-catchers-stack% 'push)
+             (cons -c- (delay ,exp2)))
+          ,exp1)))))
+
+(define (fail)
+  (if (%amb-catchers-stack% 'empty?)
+    (error "FAIL evaluated.")
+    (let ((first-continuation
+           (%amb-catchers-stack% 'pop)))
+      ((car first-continuation)
+       (force
+         (cdr first-continuation))))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+以上で、\verb$amb$と\verb$fail$をシミュレートすることはできたわけであるが、次のような問題が残る。
+\verb$amb$によってコピーされた機械は、いったい何時までとっておけば良いのかということである。
+一つの機械が\verb$fail$によって捨てられてなくなってしまった場合、もう一つの機械が動作を始め
+なければならない。しかし、\verb$fail$にいつどこで出会うのかは明確ではない。それはトップ
+レベルにおいてでさえ起こってはいけない理由はない。そこで全ての抽象的な機械のコピーを
+捨てて初期化するための明確な手続きが必要である。これを\verb$init-amb$として次のように定義する。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(macro init-amb (lambda (l)
+  `(call-with-current-continuation
+     (lambda (-c-)
+       (%amb-catchers-stack% 'initialize)
+       ((%amb-catchers-stack% 'push)
+        (cons -c- #f))
+       #t))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+さらに、\verb$amb$によってコピーされた複数の機械が、元の機械も含めてどれも解に至ることが
+できずに\verb$fail$に至ってしまった場合に、例外的な処理を行うことができると便利である。
+手続き的にみれば、これはプログラムの実行経過のある地点を越えて後戻りを行おうとした
+場合に例外処理を起動するということになる。このような機構をCommon Lispの\verb$unwind-protect$
+を真似て次のように実現する。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(macro amb-unwind-protect (lambda (l)
+  (let ((exp1 (cadr l))(exp2 (caddr l)))
+    `(call-with-current-continuation
+       (lambda (-c-)
+         ((%amb-catchers-stack% 'push)
+          (cons -c- (delay ,exp2)))
+         ,exp1)))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+実は\verb$amb$と\verb$amb-unwind-protect$は同じ定義である。
+\medskip
+\par
+簡単な実行例を示そう。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (test-body)
+    (let ((value (choice 10)))
+        (write value)
+        (newline)
+        (fail)))
+
+(define (test)
+    (amb-unwind-protect
+        (begin
+            (display "protected-form")
+            (newline)
+            (test-body))
+        (begin
+            (display "cleanup-form")
+            (newline))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\medskip
+\par
+\verb$(if (init-amb) (test) 'end)$を実行すると、まず\verb$protected-form$が表示され、
+続いて10,9,...,1が表示される。最後に\verb$cleanup-form$が表示され終了する。
+\medskip
+\par
+ここでトップレベルから\verb$(fail)$を評価しようとするならば、その評価をせずに済むように
+\verb$(init-amb)$が\verb$#f$であったように振る舞う。すなわち\verb$end$が返ってくるであろう。
+さらにもう一度\verb$(fail)$を評価しようとするならば、その評価を避ける方法は存在しないので、
+評価が起こる。これは\verb$error$となり\verb$fail$を評価してしまったというメッセージが出力される
+ことになる。
+\medskip
+
+\subsubsection{全解収集}
+\par
+先に述べた8-QUEENの例で、\verb$(queen 8)$を実行すると、92個ある解の中の一つが得られる。
+それではその他の解を求めるにはどうしたらよいであろうか。コピーした機械はまだ存在
+しているから、トップレベルから強制的に\verb$(fail)$を評価しようとすれば、その評価をしな
+いで済むような別の機械(系列が)起動されることになる。これはちょうどPrologのトップ
+レベルにおいて\verb$`;'$を入力し、強制的にバックトラックさせることに似ている。
+このようにして次々に別の解を得ることができる。つまり全解探索の機能があるということ
+になる。しかし、このままではその解の収集は評価結果を監視している人間が行っているの
+であって、新たな解を求めるために先の解を求めた機械は捨てられてしまっている。また、
+あらかじめいくつの解が存在するのかを知ることができなければ、\verb$(fail)$を強制的に何度
+行ってよいのかがわからないという問題もある。そこで、汎用の全ての解の集合(リスト)を
+返すような\verb$setof$を次のように定義することにする。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(macro setof (lambda (l)
+  (let ((proc (cadr l)))
+    `(let ((stack (make-stack)))
+       (amb-unwind-protect
+          (let ((ans ,proc))
+            ((stack 'push) ans)
+            (fail))
+          (reverse
+            (stack 'stack->list)))))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+ここで\verb$(setof (queen 8))$を評価すれば、全ての解のリストが得られる。
+\medskip
+\par
+一般に一つの解を見つけるプログラムを定義するよりも、全ての解を得るプログラムを定義する
+ことの方がはるかに困難であることが多い。例えばPrologには全解探索機能があるが、強制的に
+バックトラックを行う方法を用いると、Prologの変数は代入ではなくユニフィケーションである
+から、一度得られた情報は失われてしまい全解収集を行うことができない。しかしながらProlog
+でもこの2階の述語である\verb$setof$を実現することは可能である。それは副作用のある\verb$assert$
+述語を用いて、大域変数への代入と同様なことが行えるからである。上記した\verb$setof$の定義も
+副作用を用いて実現されている。
+\medskip
+\par
+ところで、これまで述べてきたスケジューリングによる問題はあるものの、その制約の中では
+\verb$amb$は並列プロセスへの\verb$fork$であり、\verb$setof$は全てのプロセスの終了
+を待ってその結果を受け取り、一つのプロセスへ渡す\verb$join$であるとみなすことができる。
+\bigskip

@@ -9,11 +9,8 @@
 ;;
 
 (load "schelog.scm")
-(load "bagof.scm")
 
-(compile-file "schelog.scm"
-              "bagof.scm"
-			  "schelog.bin")
+(compile-file "schelog.scm" "schelog.bin")
 
 ;;
 ;; For loading schelog.bin, input command (bin-load "schelog.bin").

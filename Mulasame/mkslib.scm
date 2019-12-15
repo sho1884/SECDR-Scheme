@@ -1,0 +1,93 @@
+(require 'dynamic-wind)
+
+(for-each
+ (lambda (filename)
+   (compile-file (string-append SCHEME_LIBRARY_PATH filename ".scm")
+		 (string-append SCHEME_LIBRARY_PATH filename ".bin")))
+ '("alist"
+   "array"
+   "arraymap"
+   "charplot"
+   "comlist"
+   "debug"
+   "dwindtst"
+   "dynamic"
+   "dynwind"
+   "format"
+   "formatst"
+   "genwrite"
+   "getopt"
+   "hash"
+   "hashtab"
+   "lineio"
+   "logical"
+;  "macrotst"
+   "macwork"
+   "modular"
+   "mulapply"
+   "mularg"
+   "mwdenote"
+   "mwexpand"
+   "mwsynrul"
+   "mwtest"
+   "obj2str"
+   "object"
+   "plottest"
+   "pp"
+   "ppfile"
+   "prime"
+   "priorque"
+   "process"
+   "promise"
+   "queue"
+   "r4rsyn"
+   "randinex"
+   "random"
+   "ratize"
+   "rbtree"
+   "rbtest"
+   "record"
+   "repl"
+   "require"
+   "scmacro"
+   "sc2"
+   "sc3"
+   "sc4sc3"
+   "sc4opt"
+   "scaexpp"
+   "scaglob"
+   "scainit"
+;  "sca-macr"
+   "scaoutp"
+   "scmactst"
+   "sort"
+   "stdio"
+   "strcase"
+   "strport"
+;  "struct"
+;  "structst"
+;  "structure"
+   "synchk"
+   "synclo"
+   "synrul"
+   "tek40"
+   "tek41"
+   "test"
+   "tree"
+   "trnscrpt"
+   "values"
+   "withfile"
+))
+
+(require 'yasos)
+(require 'collect)
+(require 'fluid-let)
+
+(for-each
+ (lambda (filename)
+   (compile-file (string-append SCHEME_LIBRARY_PATH filename ".scm")
+		 (string-append SCHEME_LIBRARY_PATH filename ".bin")))
+ '("collect"
+   "fluidlet"
+   "yasos"
+))

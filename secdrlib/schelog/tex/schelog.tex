@@ -1,0 +1,283 @@
+\documentstyle[]{jarticle}
+\setcounter{secnumdepth}{6}
+\setcounter{tocdepth}{6}
+\topsep=0.1cm
+\parsep=0.1cm
+\itemsep=0.0cm
+\begin{document}
+\title{
+Schelog\\
+An embedding of Prolog in Scheme
+}
+\author{
+(c) Dorai Sitaram, dorai@cs.rice.edu, 1989, Rice University
+}
+\date{Revised Feb. 1993
+}
+\maketitle
+
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+Installing Schelog
+******************
+\end{verbatim}}
+\medskip
+\par
+To use Schelog, the Prolog-in-Scheme provided here, you
+may have to pre-load some features not already present
+in your dialect.  The details and several Scheme files
+for accomplishing the task are given in the file \verb+readme+
+in the subdirectory \verb+portable/+ of this distribution.
+Use the appropriate files therefrom.
+\medskip
+\par
+Once you've loaded the init file, load the file
+\verb+schelog.scm+.  This gives you the Prolog embedding.
+There is no need to type anything to go from Scheme to
+Prolog --- you can use both simultaneously to the extent
+of intertwining both languages in the same
+s-expression.  The best of both worlds thing.
+\medskip
+\par
+The other Scheme files in this distribution are example
+files, most of the examples coming from Sterling and
+Shapiro's book, "The Art of Prolog".  These should give a
+fair idea as to how to write and run Prolog programs in
+Schelog.
+\medskip
+\par
+It is beyond the scope of this documentation to tell you
+\_how\_ the embedding works.  The literature abounds in
+excellent treatments of implementations of Prolog in lisp
+and Scheme.  This implementation is an embedding of the type
+described by Christopher Haynes in "Logic continuations", J.
+Logic Program. 4, 1987, p. 157-176 and by Matthias Felleisen
+in "Transliterating Prolog into Scheme", tech report \#182,
+Indiana Univ. Comp. Sci. Dept., 1985.  I.e., it uses
+Scheme's first-class full continuations to implement
+Prolog's backtracking mechanism.
+\medskip
+\newpage
+{\baselineskip=10pt
+\begin{verbatim}
+Using Schelog
+*************
+\end{verbatim}}
+\medskip
+\par
+The syntax of the Prolog provided here may be unusual.
+\medskip
+\par
+This note assumes you already know enough of Prolog and
+Scheme, at least syntaxwise.  I'll show a few examples
+whereby you can figure out how to transfer your knowledge of
+writing programs in "real" Prolog to writing in Schelog.
+\medskip
+\par
+E.g., the member predicate in "real" Prolog reads
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        member(X, [X|Xs]).
+        member(X, [Y|Ys]) :- member(X, Ys).
+\end{verbatim}}
+\medskip
+\par
+The same program in Schelog reads
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        (define %member
+          (rel (x xs y ys)
+            ((x (cons x xs)))
+            ((x (cons y ys)) (%member x ys))))
+\end{verbatim}}
+\medskip
+\par
+It is a convention --- which can be flouted --- that all
+Schelog predicate names start with \verb+%+.  This is solely to
+avoid confusion with Scheme procedures of the same name.
+Thus, the Schelog predicate for \verb+append+ is named \verb+%append+ so
+as not to clash with Scheme's \verb+append+.  The \verb+%+ is not
+mandatory however --- you may use any naming system that
+pleases you.
+\medskip
+\par
+Relations are defined using the form \verb+rel+.  \verb+rel+ is followed
+by a list of identifiers, these being the names of the logic
+variables used in the definition of the relation.  There is
+no naming convention involved here such as the
+initial-capital convention of Prolog.  \verb+rel+ introduces the
+list of rules corresponding to the relation.
+\medskip
+\par
+For Prolog's \verb+|+, simply use Scheme's cons.  In general,
+Scheme's data structures can be used without any massaging
+in Schelog.
+\medskip
+\par
+The if-then-else predicate in "real" Prolog reads
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        if_then_else(P, Q, R) :- P, !, Q.
+        if_then_else(P, Q, R) :- R.
+\end{verbatim}}
+\medskip
+\par
+The same thing in Schelog reads
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        (define %if-then-else
+          (rel (p q r)
+            ((p q r) p ! q)
+            ((p q r) r)))
+\end{verbatim}}
+\medskip
+\par
+The cut is written \verb+!+, as in Prolog.  Anonymous variables are
+written \verb+(_)+ --- thus \verb+%member+ could be rewritten as
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        (define %member
+          (rel (x xs)
+            ((x (cons x (_))))
+            ((x (cons (_) xs)) (%member x xs))))
+\end{verbatim}}
+\medskip
+\par
+which corresponds to
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        member(X, [X|_]).
+        member(X, [_|Xs]) :- member(X, Xs).
+\end{verbatim}}
+\medskip
+\par
+This should give you a feel for Schelog's syntax.  If not,
+read some of the example files provided.
+\medskip
+\par
+The interactive Prolog queries (?-) are handled with the
+form `\verb+which+'.  Type a which-query just as you would any
+Scheme expression that you'd want to evaluate, i.e., at the
+Scheme prompt.
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        > (which () (%member 1 '(1 2 3)))
+\end{verbatim}}
+\medskip
+\par
+corresponds to
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        ?- member(1, [1, 2, 3])
+\end{verbatim}}
+\medskip
+\par
+and returns
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        ()
+\end{verbatim}}
+\medskip
+\par
+This means that the goal succeeded, but since no variables
+were requested in the answer, you get an empty list.  To get
+more solutions, type \verb+(more)+.  This is like saying yes to
+Prolog's more? prompt.  Here, for instance, typing \verb+(more)+
+gives you \verb+#f+, falsity signifying that there are no alternate
+solutions to this goal.  (Note that this distinction between
+a false answer and a true answer with no variables to
+instantiate is lost in Schemes where \verb+#f+ and \verb+()+ are
+identical.  Mercifully, this is easily remedied --- simply
+use a dummy which-variable in such cases.)
+\medskip
+\par
+For another example, consider the query
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        > (which (x) (%member x '(1 2 3)))
+\end{verbatim}}
+\medskip
+\par
+Here you want an instantiation for \verb+x+ in the solution.  Sure
+enough, the result of this expression is
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        ((x 1))
+\end{verbatim}}
+\medskip
+\par
+viz., a list containing the logic variable bindings
+requested.  Here there is only one variable \verb+x+, and its
+binding is \verb+1+.
+\medskip
+\par
+Typing \verb+(more)+ gives more solutions
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        > (more)
+        ((x 2))
+        > (more)
+        ((x 3))
+        > (more)
+        #f
+\end{verbatim}}
+\medskip
+\par
+The final \verb+#f+ shows that there are no more solutions.
+\medskip
+\par
+One could also have queries of the form
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        > (letref (x ...) (which (y ...) query))
+\end{verbatim}}
+\medskip
+\par
+Both \verb+letref+ and \verb+which+ introduce local logic variables (much
+like Scheme's \verb+let+).  However, in the solutions, only the
+which-variables are enumerated.  E.g.,
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        > (letref (x) (which () (%member x '(1 2 3))))
+\end{verbatim}}
+\medskip
+\par
+succeeds three times, without giving the values of \verb+x+.
+\medskip
+{\baselineskip=10pt
+\begin{verbatim}
+        ()
+        > (more)
+        ()
+        > (more)
+        ()
+        > (more)
+        ()
+        > (more)
+        #f
+\end{verbatim}}
+\medskip
+\par
+Since Schelog relations are just Scheme procedures, one can
+use lexical scoping to define auxiliary relations, e.g.,
+\verb+%reverse+ using an auxiliary that employs an accumulator (see
+\verb+toys.scm+).  One is also not tied to the Prolog style ---
+regular Scheme can be used too, treating Prolog relations as
+just another paradigm used for local convenience along with
+the other paradigms of Scheme.
+\end{document}

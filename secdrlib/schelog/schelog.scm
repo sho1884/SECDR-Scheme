@@ -1,369 +1,626 @@
-;;;                            schelog
-;;;                 An Embedding of Prolog in Scheme
-;;;          Written by Dorai Sitaram, Rice University, 1989
-;;;     Permission is granted for unrestricted non-commercial use
+;schelog.scm
+;schelog
+;An embedding of Prolog in Scheme
+;(c) Dorai Sitaram, dorai@cs.rice.edu, 1989, Rice University
+;revised Feb. 1993
 
-;;;;    for SECDR Scheme
-;;;     Date revised    29-May-1992 by Shoichi Hayashi
+;If you use SLIB (the Scheme library maintained by
+;Aubrey Jaffer), set the following boolean variable to
+;#t, else #f.
 
-;;; logic variables and their manipulation
+(define schelog:using-slib? #f)
 
-(define (prompt-read prompt) (display prompt) (read))
-(define make-temp-symbol gensym)
-(define **unbound** (make-temp-symbol "_"))
-(define new-box (lambda () (box **unbound**)))
-(define unbind-box! (lambda (b) (set-box! b **unbound**) #f))
-(define unbound-box?
-  (lambda (b) (and (box? b) (eq? (unbox b) **unbound**))))
+(cond (schelog:using-slib?
+        (require 'rev2-procedures)
+        (require 'common-list-functions)
+        (define reverse! nreverse)
+        (require 'mbe))
+      (else #f ;;make sure that the init file you
+        ;;loaded before loading this file defines the
+        ;;non-r4rs procedures append! and reverse!, and
+        ;;define-syntax, the macro facility for
+        ;;defining r4rs high-level macros.  (Only
+        ;;top-level macros are needed.) Sample
+        ;;implementations of these are provided in the
+        ;;Schelog distribution in the subdirectory
+        ;;portable/
+        ))
 
-(define **frozen** (make-temp-symbol "@"))
-(define freeze-box (lambda (b) (box (cons **frozen** b))))
-(define thaw-box (lambda (b) (cdr (unbox b))))
-(define frozen-box?
-  (lambda (b) (and (box? b)
-		   (let ((c (unbox b)))
-		     (and (pair? c) (eq? (car c) **frozen**))))))
+(define schelog:call/cc call-with-current-continuation)
 
-(define derefl
-  (lambda (x)
-    (cond ((unbound-box? x) (unbox x))
-	  ((frozen-box? x) x)
-	  ((box? x) (derefl (unbox x)))
-	  ((pair? x) (let ((a (car x)) (d (cdr x)))
-		       (let ((a1 (derefl a)) (d1 (derefl d)))
-			 (if (and (eq? a a1) (eq? d d1)) x
-			   (cons a1 d1)))))
-	  (else x))))
+;logic variables and their manipulation
 
-;;; letref introduces new logic-variables
+(define schelog:*ref* "ref")
 
-(extend-syntax (letref)
-  ((letref (x ...) e ...) (let ((x (new-box)) ...) e ...)))
+(define schelog:*unbound* '_)
 
-;;; call/cfc is to command contns as call/cc is to expression contns
+(define schelog:make-ref
+  ;;makes a fresh unbound ref;
+  ;;unbound refs point to themselves
+  (lambda opt
+    (vector schelog:*ref*
+      (if (null? opt) schelog:*unbound*
+	(car opt)))))
 
-(define call/cfc
-  (lambda (f)
-    (call/cc (lambda (k) (f (lambda () (k '<call/cfc>)))))))
+(define _ schelog:make-ref)
 
-;;; the unify predicate, called = in Prolog
+(define schelog:ref?
+  (lambda (r)
+    (and (vector? r)
+	 (eq? (vector-ref r 0) schelog:*ref*))))
 
-(define %unify
+(define schelog:deref
+  (lambda (r)
+    (vector-ref r 1)))
+
+(define schelog:set-ref!
+  (lambda (r v)
+    (vector-set! r 1 v)))
+
+(define schelog:unbound-ref?
+  (lambda (r)
+    (eq? (schelog:deref r) schelog:*unbound*)))
+
+(define schelog:unbind-ref!
+  (lambda (r)
+    (schelog:set-ref! r schelog:*unbound*)))
+
+;frozen logic vars
+
+(define schelog:*frozen* "frozen")
+
+(define schelog:freeze-ref
+  (lambda (r)
+    (schelog:make-ref (vector schelog:*frozen* r))))
+
+(define schelog:thaw-frozen-ref
+  (lambda (r)
+    (vector-ref (schelog:deref r) 1)))
+
+(define schelog:frozen-ref?
+  (lambda (r)
+    (let ((r2 (schelog:deref r)))
+      (and (vector? r2)
+	   (eq? (vector-ref r2 0) schelog:*frozen*)))))
+
+;deref a structure completely (except the frozen ones, i.e.)
+
+(define schelog:deref*
+  (lambda (s)
+    (cond ((schelog:ref? s)
+	   (if (schelog:frozen-ref? s) s
+	     (schelog:deref* (schelog:deref s))))
+	  ((pair? s) (cons (schelog:deref* (car s)) (schelog:deref* (cdr s))))
+	  ((vector? s)
+	   (list->vector (map schelog:deref* (vector->list s))))
+	  (else s))))
+
+;letref introduces new logic variables
+
+(define schelog:*logic-variables* '())
+
+(define-syntax letref
+  (syntax-rules (schelog:*logic-variables*)
+    ((letref (x ...) . e)
+     (let ((x (schelog:make-ref)) ...)
+       (let ((schelog:*logic-variables*
+	       (append! (list x ...) schelog:*logic-variables*)))
+	 . e)))))
+
+;the unify predicate
+
+(define schelog:unify
   (lambda (t1 t2)
     (lambda (fk)
       (letrec
-	((unify1 (lambda (t1 t2 s)
-		   (cond ((eqv? t1 t2) s)
-			 ((box? t1)
-			  (if (unbound-box? t1)
-			      (begin (set-box! t1 t2) (cons t1 s))
-			      (unify1 (unbox t1) t2 s)))
-			 ((box? t2) (unify1 t2 t1 s))
-			 ((and (pair? t1) (pair? t2))
-			  (unify1 (cdr t1) (cdr t2)
-			    (unify1 (car t1) (car t2) s)))
-			 (else (for-each unbind-box! s) (fk))))))
-	(let ((s (unify1 t1 t2 ())))
-	  (lambda () (for-each unbind-box! s) (fk)))))))
+	((cleanup-n-fail
+	   (lambda (s)
+	     (for-each schelog:unbind-ref! s)
+	     (fk 'fail)))
+	 (unify1
+	   (lambda (t1 t2 s)
+	     (cond ((eqv? t1 t2) s)
+		   ((schelog:ref? t1)
+		    (cond ((schelog:unbound-ref? t1)
+			   (schelog:set-ref! t1 t2)
+			   (cons t1 s))
+			  ((schelog:frozen-ref? t1)
+			   (cond ((schelog:ref? t2)
+				  (cond ((schelog:unbound-ref? t2)
+					 (schelog:set-ref! t2 t1)
+					 (cons t2 s))
+					((schelog:frozen-ref? t2)
+					 (cleanup-n-fail s))
+					(else
+					  (unify1 t1 (schelog:deref t2) s))))
+				 (else (cleanup-n-fail s))))
+			  (else (unify1 (schelog:deref t1) t2 s))))
+		   ((schelog:ref? t2) (unify1 t2 t1 s))
+		   ((and (pair? t1) (pair? t2))
+		    (unify1 (cdr t1) (cdr t2)
+		      (unify1 (car t1) (car t2) s)))
+		   ((and (vector? t1) (vector? t2))
+		    (unify1 (vector->list t1)
+		      (vector->list t2) s))
+		   (else
+		     (for-each schelog:unbind-ref! s)
+		     (fk 'fail))))))
+	(let ((s (unify1 t1 t2 '())))
+	  (lambda (d)
+	    (cleanup-n-fail s)))))))
 
-;;; rel introduces relations, which are bunches of related rules
+(define == schelog:unify)
 
-(extend-syntax (rel !) 
-  ((rel (b ...) ((a ...) p ...) ...)
-   (lambda __fmls
+;disjunction
+
+(define-syntax %or
+  (syntax-rules ()
+    ((%or g ...)
      (lambda (__fk)
-       (letref (b ...)
-	 (let ((! (lambda (fk1) __fk)))
-	   (call/cc
-	     (lambda (__sk)
-	       (call/cfc
-		 (lambda (__fk)
-		   (let* ((__fk ((%unify __fmls (list a ...)) __fk))
-			  (__fk ((derefl p) __fk)) ...)
-		     (__sk __fk))))
-	       ...
-	       (__fk)))))))))
+       (call-with-current-continuation
+	 (lambda (__sk)
+	   (call-with-current-continuation
+	     (lambda (__fk)
+	       (__sk ((schelog:deref* g) __fk))))
+	   ...
+	   (__fk 'fail)))))))
 
-;;; the fail and true predicates
+;conjunction
 
-(define %fail (lambda (fk) (fk)))
-(define %true (lambda (fk) fk))
+(define-syntax %and
+  (syntax-rules ()
+    ((%and g ...)
+     (lambda (__fk)
+       (let* ((__fk ((schelog:deref* g) __fk))
+	      ...)
+	 __fk)))))
 
-;;; introduces new structure-builders; cons is built-in and is the same
-;;; as Scheme's cons
+;cut
 
-(extend-syntax (define-functor) 
-  ((define-functor functor comp ...)
-   (define functor (lambda (comp ...) (cons 'functor (list comp ...))))))
+(define-syntax %cut
+  (syntax-rules (!)
+    ((%cut g)
+     (lambda (__fk)
+       (let ((! (lambda (__fk2) __fk)))
+	 ((schelog:deref* g) __fk))))))
 
-;;; use (_) for creating anonymous variables a la Prolog's _
+;Prolog-like sugar
 
-(define _ new-box)
+(define-syntax rel
+  (syntax-rules (!)
+    ((rel (v ...) ((a ...) subgoal ...) ...)
+     (lambda __fmls
+       (lambda (__fk)
+	 (letref (v ...)
+	   (let ((! (lambda (fk1) __fk)))
+	     (call-with-current-continuation
+	       (lambda (__sk)
+		 (call-with-current-continuation
+		   (lambda (__fk)
+		     (let* ((__fk ((schelog:unify __fmls (list a ...))
+				   __fk))
+			    (__fk ((schelog:deref* subgoal) __fk))
+			    ...)
+		       (__sk __fk))))
+		 ...
+		 (__fk 'fail))))))))))
 
-;;; arithmetic, Prolog's is
+;the fail and true preds
 
-(extend-syntax (%is quote) 
-  ((%is(1) (quote x) fk) (quote x))
-  ((%is(1) (x ...) fk) ((%is(1) x fk) ...))
-  ((%is(1) x fk) (if (unbound-box? x) (fk) (derefl x)))
-  ((%is v e) (lambda (__fk) ((%unify v (%is(1) e __fk)) __fk))))
+(define %fail
+  (lambda (fk) (fk 'fail)))
 
-;;; defining arithmetic comparison operators
+(define %true
+  (lambda (fk) fk))
 
-(define *bin-arith-rel
+;for structures ("functors"), use Scheme's list and vector
+;functions and anything that's built using them.
+
+;arithmetic
+
+(define-syntax %is
+  (syntax-rules (quote)
+    ((%is v e)
+     (lambda (__fk)
+       ((== v (%is (1) e __fk)) __fk)))
+
+    ((%is (1) (quote x) fk) (quote x))
+    ((%is (1) (x ...) fk)
+     ((%is (1) x fk) ...))
+    ((%is (1) x fk)
+     (if (and (schelog:ref? x) (schelog:unbound-ref? x))
+	 (fk 'fail) (schelog:deref* x)))))
+
+;defining arithmetic comparison operators
+
+(define schelog:make-binary-arithmetic-relation
   (lambda (f)
-    (rel (x y) ((x y) (%is #t (f x y))))))
+    (lambda (x y)
+      (%is #t (f x y)))))
 
-(define %eq (*bin-arith-rel =))
-(define %gt (*bin-arith-rel >))
-(define %ge (*bin-arith-rel >=))
-(define %lt (*bin-arith-rel <))
-(define %le (*bin-arith-rel <=))
-(define %ne (*bin-arith-rel (lambda (m n) (not (= m n)))))
+(define %eq (schelog:make-binary-arithmetic-relation =))
+(define %gt (schelog:make-binary-arithmetic-relation >))
+(define %ge (schelog:make-binary-arithmetic-relation >=))
+(define %lt (schelog:make-binary-arithmetic-relation <))
+(define %le (schelog:make-binary-arithmetic-relation <=))
+(define %ne (schelog:make-binary-arithmetic-relation
+	      (lambda (m n) (not (= m n)))))
 
-;;; type predicates
+;type predicates
 
-(define %%constant
+(define schelog:constant?
   (lambda (x)
-    (cond ((unbound-box? x) #f)
-	  ((frozen-box? x) #t)
-	  ((box? x) (%%constant (unbox x)))
+    (cond ((schelog:ref? x)
+	   (cond ((schelog:unbound-ref? x) #f)
+		 ((schelog:frozen-ref? x) #t)
+		 (else (schelog:constant? (schelog:deref x)))))
 	  ((pair? x) #f)
+	  ((vector? x) #f)
 	  (else #t))))
 
-(define %%compound
+(define schelog:compound?
   (lambda (x)
-    (cond ((unbound-box? x) #f)
-	  ((frozen-box? x) #f)
-	  ((box? x) (%%compound (unbox x)))
+    (cond ((schelog:ref? x) (cond ((schelog:unbound-ref? x) #f)
+			  ((schelog:frozen-ref? x) #f)
+			  (else (schelog:compound? (schelog:deref x)))))
 	  ((pair? x) #t)
+	  ((vector? x) #t)
 	  (else #f))))
 
 (define %constant
   (lambda (x)
-    (lambda (fk) (if (%%constant x) fk (fk)))))
+    (lambda (fk)
+      (if (schelog:constant? x) fk (fk 'fail)))))
 
 (define %compound
   (lambda (x)
-    (lambda (fk) (if (%%compound x) fk (fk)))))
+    (lambda (fk)
+      (if (schelog:compound? x) fk (fk 'fail)))))
 
-;;; metalogical type predicates
+;metalogical type predicates
 
-(define %%var
+(define schelog:var?
   (lambda (x)
-    (cond ((unbound-box? x) #t)
-	  ((frozen-box? x) #f)
-	  ((box? x) (%%var (unbox x)))
-	  ((pair? x) (or (%%var (car x)) (%%var (cdr x))))
+    (cond ((schelog:ref? x)
+	   (cond ((schelog:unbound-ref? x) #t)
+		 ((schelog:frozen-ref? x) #f)
+		 (else (schelog:var? (schelog:deref x)))))
+	  ((pair? x) (or (schelog:var? (car x)) (schelog:var? (cdr x))))
+	  ((vector? x) (schelog:var? (vector->list x)))
 	  (else #f))))
-	    
-(define %%nonvar (lambda (x) (not (%%var x))))
 
 (define %var
   (lambda (x)
-    (lambda (fk) (if (%%var x) fk (fk)))))
+    (lambda (fk) (if (schelog:var? x) fk (fk 'fail)))))
 
 (define %nonvar
   (lambda (x)
-    (lambda (fk) (if (%%var x) (fk) fk))))
+    (lambda (fk) (if (schelog:var? x) (fk 'fail) fk))))
 
-;;; %unify
+; negation of unify
 
-(define *negation ; basically inlined cut-fail
+(define schelog:make-negation ;basically inlined cut-fail
   (lambda (p)
-    (lambda aa
+    (lambda args
       (lambda (fk)
-	(if (call/cc
+	(if (call-with-current-continuation
 	      (lambda (k)
-		((apply p aa) (lambda () (k #f))))) (fk) fk)))))
+		((apply p args) (lambda (d) (k #f)))))
+	    (fk 'fail)
+	    fk)))))
 
-(define %notunify (*negation %unify))
+(define %notunify
+  (schelog:make-negation schelog:unify))
 
-(define %%ident
+;identical
+
+(define schelog:ident?
   (lambda (x y)
-    (cond ((unbound-box? x)
-	   (cond ((unbound-box? y) (eq? x y))
-		 ((frozen-box? y) #f)
-		 ((box? y) (%%ident x (unbox y)))
-		 ((pair? y) #f)
-		 (else #f)))
-	  ((frozen-box? x)
-	   (cond ((unbound-box? y) #f)
-		 ((frozen-box? y) (eq? x y))
-		 ((box? y) (%%ident x (unbox y)))
-		 ((pair? y) #f)
-		 (else #f)))
-	  ((box? x) (%%ident (unbox x) y))
+    (cond ((schelog:ref? x)
+	   (cond ((schelog:unbound-ref? x)
+		  (cond ((schelog:ref? y)
+			 (cond ((schelog:unbound-ref? y) (eq? x y))
+			       ((schelog:frozen-ref? y) #f)
+			       (else (schelog:ident? x (schelog:deref y)))))
+			(else #f)))
+		 ((schelog:frozen-ref? x)
+		  (cond ((schelog:ref? y)
+			 (cond ((schelog:unbound-ref? y) #f)
+			       ((schelog:frozen-ref? y) (eq? x y))
+			       (else (schelog:ident? x (schelog:deref y)))))
+			(else #f)))
+		 (else (schelog:ident? (schelog:deref x) y))))
 	  ((pair? x)
-	   (cond ((unbound-box? y) #f)
-		 ((frozen-box? y) #f)
-		 ((box? y) (%%ident x (unbox y)))
-		 ((pair? y) (and (%%ident (car x) (car y))
-				 (%%ident (cdr x) (cdr y))))
+	   (cond ((schelog:ref? y)
+		  (cond ((schelog:unbound-ref? y) #f)
+			((schelog:frozen-ref? y) #f)
+			(else (schelog:ident? x (schelog:deref y)))))
+		 ((pair? y)
+		  (and (schelog:ident? (car x) (car y))
+		       (schelog:ident? (cdr x) (cdr y))))
+		 (else #f)))
+	  ((vector? x)
+	   (cond ((schelog:ref? y)
+		  (cond ((schelog:unbound-ref? y) #f)
+			((schelog:frozen-ref? y) #f)
+			(else (schelog:ident? x (schelog:deref y)))))
+		 ((vector? y)
+		  (schelog:ident? (vector->list x)
+		    (vector->list y)))
 		 (else #f)))
 	  (else
-	    (cond ((unbound-box? y) #f)
-		  ((frozen-box? y) #f)
-		  ((box? y) (%%ident x (unbox y)))
+	    (cond ((schelog:ref? y)
+		   (cond ((schelog:unbound-ref? y) #f)
+			 ((schelog:frozen-ref? y) #f)
+			 (else (schelog:ident? x (schelog:deref y)))))
 		  ((pair? y) #f)
+		  ((vector? y) #f)
 		  (else (eqv? x y)))))))
 
 (define %ident
   (lambda (x y)
-    (lambda (fk) (if (%%ident x y) fk (fk)))))
+    (lambda (fk) (if (schelog:ident? x y) fk (fk 'fail)))))
 
 (define %notident
   (lambda (x y)
-    (lambda (fk) (if (%%ident) (fk) fk))))
+    (lambda (fk) (if (schelog:ident? x y) (fk 'fail) fk))))
 
-;;; variables as objs
+;variables as objects
 
-(define %%freeze
-  (lambda (t)
-    (let ((dict ()))
-      (let loop ((t t))
-	(cond ((unbound-box? t)
-	       (let ((x (assq t dict)))
-		 (if x (cdr x)
-		     (let ((y (freeze-box t)))
-		       (set! dict (cons (cons t y) dict))
-		       y))))
-	      ((frozen-box? t) t)
-	      ((box? t) (loop (unbox t)))
-	      ((pair? t) (cons (loop (car t)) (loop (cdr t))))
-	      (else t))))))
+(define schelog:freeze
+  (lambda (s)
+    (let ((dict '()))
+      (let loop ((s s))
+	(cond ((schelog:ref? s)
+	       (cond ((or (schelog:unbound-ref? s) (schelog:frozen-ref? s))
+		      (let ((x (assq s dict)))
+			(if x (cdr x)
+			    (let ((y (schelog:freeze-ref s)))
+			      (set! dict (cons (cons s y) dict))
+			      y))))
+		     ;((schelog:frozen-ref? s) s) ;?
+		     (else (loop (schelog:deref s)))))
+	      ((pair? s) (cons (loop (car s)) (loop (cdr s))))
+	      ((vector? s)
+	       (list->vector (map loop (vector->list s))))
+	      (else s))))))
 
-(define %%melt
+(define schelog:melt
   (lambda (f)
-    (cond ((unbound-box? f) f)
-	  ((frozen-box? f) (thaw-box f))
-	  ((box? f) (%%melt (unbox f)))
-	  ((pair? f) (cons (%%melt (car f)) (%%melt (cdr f))))
+    (cond ((schelog:ref? f)
+	   (cond ((schelog:unbound-ref? f) f)
+		 ((schelog:frozen-ref? f) (schelog:thaw-frozen-ref f))
+		 (else (schelog:melt (schelog:deref f)))))
+	  ((pair? f)
+	   (cons (schelog:melt (car f)) (schelog:melt (cdr f))))
+	  ((vector? f)
+	   (list->vector (map schelog:melt (vector->list f))))
 	  (else f))))
-    
 
-(define %%melt-new
+(define schelog:melt-new
   (lambda (f)
-    (let ((dict ()))
+    (let ((dict '()))
       (let loop ((f f))
-	(cond ((unbound-box? f) f)
-	      ((frozen-box? f)
-	       (let ((x (assq f dict)))
-		 (if x (cdr x)
-		     (let ((y (new-box)))
-		       (set! dict (cons (cons f y) dict))
-		       y))))
-	      ((box? f) (loop (unbox f)))
+	(cond ((schelog:ref? f)
+	       (cond ((schelog:unbound-ref? f) f)
+		     ((schelog:frozen-ref? f)
+		      (let ((x (assq f dict)))
+			(if x (cdr x)
+			    (let ((y (schelog:make-ref)))
+			      (set! dict (cons (cons f y) dict))
+			      y))))
+		     (else (loop (schelog:deref f)))))
 	      ((pair? f) (cons (loop (car f)) (loop (cdr f))))
+	      ((vector? f)
+	       (list->vector (map loop (vector->list f))))
 	      (else f))))))
 
-(define %%copy (lambda (t) (%%melt-new (%%freeze t))))
+(define schelog:copy
+  (lambda (s)
+    (schelog:melt-new (schelog:freeze s))))
 
 (define %freeze
-  (lambda (t f)
+  (lambda (s f)
     (lambda (fk)
-      ((%unify
-	 f (%%freeze t)) fk))))
+      ((schelog:unify (schelog:freeze s) f) fk))))
 
 (define %melt
-  (lambda (f t)
+  (lambda (f s)
     (lambda (fk)
-      ((%unify
-	 t (%%melt f)) fk))))
+      ((schelog:unify (schelog:melt f) s) fk))))
 
 (define %melt-new
-  (lambda (f t)
+  (lambda (f s)
     (lambda (fk)
-      ((%unify
-	 t (%%melt-new f)) fk))))
-
-'(define %copy
-  (rel (term copy frozen)
-    ((term copy) (%freeze term frozen) (%melt-new frozen copy))))
+      ((schelog:unify (schelog:melt-new f) s) fk))))
 
 (define %copy
-  (lambda (t c)
+  (lambda (s c)
     (lambda (fk)
-      ((%unify c (%%copy t)) fk))))
+      ((schelog:unify (schelog:copy s) c) fk))))
 
-;;; negation as failure
-
-'(define %not (rel (x) ((x) x ! %fail) ((x))))
+;negation as failure
 
 (define %not
   (lambda (g)
     (lambda (fk)
-      (if (call/cc
+      (if (call-with-current-continuation
 	    (lambda (k)
-	      ((derefl g) (lambda () (k #f))))) (fk) fk))))
+	      ((schelog:deref* g) (lambda (d) (k #f)))))
+	  (fk 'fail) fk))))
 
-;;; metavariable facility
+;set predicates
 
-(define %call ; for completeness, i guess?
-  (lambda (g)
-    (lambda (fk)
-      ((let loop ((g g))
-	 (cond ((unbound-box? g) (fk))
-	       ((frozen-box? g) (error '%call "~a" g))
-	       ((box? g) (loop (unbox g)))
-	       ((pair? g) (error '%call "~a" g))
-	       ((procedure? g) g)
-	       (else (error '%call "~a" g)))) fk))))
+(define schelog:set-cons
+  (lambda (e s)
+    (if (member e s) s (cons e s))))
 
-(define %or
-  (lambda gg
-    (lambda (fk)
-      (call/cc
-	(lambda (sk)
-	  (let loop ((gg gg))
-	    (if (null? gg) (fk)
-	      (begin
-		(call/cfc
-		  (lambda (fk)
-		    (sk ((derefl (car gg)) fk))))
-		(loop (cdr gg))))))))))
+(define schelog:find-unbounds
+  (lambda (e1 . e2)
+    (let ((s '()))
+      (let loop ((e e2))
+	(cond ((null? e) 'skip)
+	      ((pair? e)
+	       (loop (car e))
+	       (loop (cdr e)))
+	      ((schelog:ref? e)
+	       (cond ((schelog:unbound-ref? e)
+		      (if (memq e s) 'skip
+			(set! s (cons e s))))
+		     ((schelog:frozen-ref? e) 'skip)
+		     (else (loop (schelog:deref e)))))
+	      ((vector? e)
+	       (let ((n (vector-length e)))
+		 (do ((i 0 (+ i 1)))
+		     ((>= i n))
+		     (loop (vector-ref e i)))))
+	      (else 'skip)))
+      (let ((r '()))
+	(let loop ((e e1))
+	  (cond ((null? e) 'skip)
+		((pair? e)
+		 (loop (car e))
+		 (loop (cdr e)))
+		((schelog:ref? e)
+		 (cond ((schelog:unbound-ref? e)
+			(if (or (memq e s) (memq e r)) 'skip
+			  (set! r (cons e r))))
+		       ((schelog:frozen-ref? e) 'skip)
+		       (else (loop (schelog:deref e)))))
+		((vector? e)
+		 (let ((n (vector-length e)))
+		   (do ((i 0 (+ i 1)))
+		       ((>= i n))
+		       (loop (vector-ref e i)))))
+		(else 'skip)))
+	r))))
 
-(define %and
-  (lambda gg
-    (lambda (fk)
-      (let loop ((gg gg) (fk fk))
-	(if (null? gg) fk
-	  (loop (cdr gg) ((derefl (car gg)) fk)))))))
+(define schelog:restore-unbounds
+  (lambda (s)
+    (for-each schelog:unbind-ref! s)))
 
-;;; usual Prolog interface
+(define schelog:make-bag-of
+  (lambda (kons)
+    (lambda (lv fvv goal bag)
+      (lambda (fk)
+	(let* ((uu (schelog:find-unbounds fvv lv bag))
+	       (ans
+		 (call-with-current-continuation
+		   (lambda (ans-k)
+		     (let* ((bag '())
+			    (fk-final
+			      (lambda (d)
+				(let ((s (reverse! bag)))
+				  ;merely to gc
+				  (set! bag '())
+				  (ans-k s))))
+			    (fk (goal fk-final)))
+		       (set! bag (kons (schelog:deref* lv) bag))
+		       (fk 'retry))))))
+	  (schelog:restore-unbounds uu)
+	  ((schelog:unify ans bag) fk))))))
 
-(define *prolog-more-prompt* " ;                                      more? ")
+(define schelog:bag-of (schelog:make-bag-of cons))
+(define schelog:set-of (schelog:make-bag-of schelog:set-cons))
 
-(extend-syntax (which)
-  ((which (b ...) p ...)
-   (letref (b ...)
-     (call/cc
-       (lambda (__k)
-	 (let* ((__fk (lambda () (__k #f)))
-		(__fk ((derefl p) __fk)) ...)
-	   (for-each (lambda (var val)
-;		       (printf " ~a = " var)
-		       (display var)(display " = ")
-;		       (pretty-print (derefl val)))
-		       (write (derefl val)))
-	     '(b ...) (list b ...))
-	   (display #t)
-	   (let loop ((__fk __fk))
-	     (case (prompt-read *prolog-more-prompt*)
-	       ((n no) #f)
-	       (else (loop (__fk)))))))))))
+(define-syntax %bag-of
+  (syntax-rules ()
+    ((%bag-of x goal bag)
+     (schelog:bag-of x schelog:*logic-variables* goal bag))))
 
-;;; side-effects: assert(az), retract? not put in. Use Scheme for
-;;; nicer side-effect interface
+(define-syntax %set-of
+  (syntax-rules ()
+    ((%set-of x goal set)
+     (schelog:set-of x schelog:*logic-variables* goal set))))
 
-;;; utilities, written in Prolog
+'(define-syntax %exists
+  (syntax-rules ()
+    ((%exists y goal)
+     (%and (letref (__tmp)
+	     (%bag-of y goal __tmp)) %true))))
+
+;but this is probably cheaper
+
+(define-syntax %exists
+  (syntax-rules ()
+    ((%exists y goal)
+     (let ((y (schelog:copy y))) goal))))
+
+;%bag-of-1, %set-of-1 hold if there's at least one solution
+
+(define-syntax %bag-of-1
+  (syntax-rules ()
+    ((%bag-of-1 x g ii)
+     (%and (%bag-of x g ii)
+       (schelog:unify ii (cons (_) (_)))))))
+
+(define-syntax %set-of-1
+  (syntax-rules ()
+    ((%set-of-1 x g ii)
+     (%and (%set-of x g ii)
+       (schelog:unify ii (cons (_) (_)))))))
+
+;user interface
+
+;(which (v ...) query) returns #f if query fails and instantiations
+;of v ... if query succeeds.  In the latter case, type (more) to
+;retry query for more instantiations.
+
+(define schelog:*more-k* 'forward)
+(define schelog:*more-fk* 'forward)
+
+(define-syntax which
+  (syntax-rules (schelog:*more-k* schelog:*more-fk*)
+    ((which (v ...) g)
+     (letref (v ...)
+       (call-with-current-continuation
+         (lambda (__qk)
+           (set! schelog:*more-k* __qk)
+           (set! schelog:*more-fk*
+             ((schelog:deref* g)
+              (lambda (d)
+                (set! schelog:*more-fk* #f)
+                (schelog:*more-k* #f))))
+           (schelog:*more-k*
+             (map (lambda (nam val) (list nam (schelog:deref* val)))
+                  '(v ...)
+                  (list v ...)))))))))
+
+(define more
+  (lambda ()
+    (call-with-current-continuation
+      (lambda (k)
+	(set! schelog:*more-k* k)
+	(if schelog:*more-fk* (schelog:*more-fk* 'more)
+	  #f)))))
+
+;end of embedding code.  The following are
+;some utilities, written in Schelog
 
 (define %member
-  (rel (x x... y y...)
-    ((x (cons x x...)))
-    ((x (cons y y...)) (%member x y...))))
+  (lambda (x y)
+    (letref (xs z zs)
+      (%or
+	(== y (cons x xs))
+	(%and (== y (cons z zs))
+	  (%member x zs))))))
 
-(define %ifthenelse
+(define %if-then-else
+  (lambda (p q r)
+    (%cut
+      (%or
+	(%and p ! q)
+	r))))
+
+;the above could also have been written in a more
+;Prolog-like fashion, viz.
+
+'(define %member
+  (rel (x xs y ys)
+    ((x (cons x xs)))
+    ((x (cons y ys)) (%member x ys))))
+
+'(define %if-then-else
   (rel (p q r)
     ((p q r) p ! q)
     ((p q r) r)))

@@ -1,5 +1,5 @@
 ;;;; `test.scm' Test correctness of scheme implementations.
-;;; Copyright (C) 1991, 1992 Aubrey Jaffer.
+;;; Copyright (C) 1991, 1992, 1993, 1994 Aubrey Jaffer.
 
 ;;; This includes examples from
 ;;; William Clinger and Jonathan Rees, editors.
@@ -54,11 +54,15 @@
 		  errs)))
   (newline))
 
+(SECTION 2 1);; test that all symbol characters are supported.
+'(+ - ... !.. $.+ %.- &.! *.: /:. :+. <-. =. >. ?. ~. _. ^.)
+
 (SECTION 3 4)
 (define disjoint-type-functions
   (list boolean? char? null? number? pair? procedure? string? symbol? vector?))
 (define type-examples
-  (list #t #f #\a '() 9739 '(test) record-error "test" "" 'test '#() '#(a b c) ))
+  (list
+   #t #f #\a '() 9739 '(test) record-error "test" "" 'test '#() '#(a b c) ))
 (define i 1)
 (for-each (lambda (x) (display (make-string i #\ ))
 		  (set! i (+ 3 i))
@@ -134,15 +138,15 @@
 (define x 34)
 (test 5 'let (let ((x 3)) (define x 5) x))
 (test 34 'let x)
-(test 5 'let (let () (define x 5) x))
+(test 6 'let (let () (define x 6) x))
 (test 34 'let x)
-(test 5 'let* (let* ((x 3)) (define x 5) x))
+(test 7 'let* (let* ((x 3)) (define x 7) x))
 (test 34 'let* x)
-(test 5 'let* (let* () (define x 5) x))
+(test 8 'let* (let* () (define x 8) x))
 (test 34 'let* x)
-(test 5 'letrec (letrec () (define x 5) x))
+(test 9 'letrec (letrec () (define x 9) x))
 (test 34 'letrec x)
-(test 5 'letrec (letrec ((x 3)) (define x 5) x))
+(test 10 'letrec (letrec ((x 3)) (define x 10) x))
 (test 34 'letrec x)
 (SECTION 4 2 3)
 (define x 0)
@@ -504,8 +508,8 @@
 (test #f string->number "-")
 (test #f string->number "+")
 (SECTION 6 6)
-(test #t eq? '#\  #\Space)
-(test #t eq? #\space '#\Space)
+(test #t eqv? '#\  #\Space)
+(test #t eqv? #\space '#\Space)
 (test #t char? #\a)
 (test #t char? #\()
 (test #t char? #\ )
@@ -613,7 +617,9 @@
 (test #f char-lower-case? #\space)
 (test #f char-lower-case? #\;)
 
-(test 9 char->integer (integer->char 9))
+(test #\. integer->char (char->integer #\.))
+(test #\A integer->char (char->integer #\A))
+(test #\a integer->char (char->integer #\a))
 (test #\A char-upcase #\A)
 (test #\A char-upcase #\a)
 (test #\a char-downcase #\A)

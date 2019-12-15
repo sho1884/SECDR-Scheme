@@ -1,0 +1,190 @@
+;schelog.doc
+;Schelog
+;An embedding of Prolog in Scheme
+;(c) Dorai Sitaram, dorai@cs.rice.edu, 1989, Rice University
+;Revised Feb. 1993
+
+Installing Schelog
+******************
+
+To use Schelog, the Prolog-in-Scheme provided here, you
+may have to pre-load some features not already present
+in your dialect.  The details and several Scheme files
+for accomplishing the task are given in the file readme
+in the subdirectory portable/ of this distribution.
+Use the appropriate files therefrom.
+
+Once you've loaded the init file, load the file
+schelog.scm.  This gives you the Prolog embedding.
+There is no need to type anything to go from Scheme to
+Prolog -- you can use both simultaneously to the extent
+of intertwining both languages in the same
+s-expression.  The best of both worlds thing.
+
+The other Scheme files in this distribution are example
+files, most of the examples coming from Sterling and
+Shapiro's book, "The Art of Prolog".  These should give a
+fair idea as to how to write and run Prolog programs in
+Schelog.
+
+It is beyond the scope of this documentation to tell you
+_how_ the embedding works.  The literature abounds in
+excellent treatments of implementations of Prolog in lisp
+and Scheme.  This implementation is an embedding of the type
+described by Christopher Haynes in "Logic continuations", J.
+Logic Program. 4, 1987, p. 157-176 and by Matthias Felleisen
+in "Transliterating Prolog into Scheme", tech report #182,
+Indiana Univ. Comp. Sci. Dept., 1985.  I.e., it uses
+Scheme's first-class full continuations to implement
+Prolog's backtracking mechanism.
+
+Using Schelog
+*************
+
+The syntax of the Prolog provided here may be unusual.
+
+This note assumes you already know enough of Prolog and
+Scheme, at least syntaxwise.  I'll show a few examples
+whereby you can figure out how to transfer your knowledge of
+writing programs in "real" Prolog to writing in Schelog.
+
+E.g., the member predicate in "real" Prolog reads
+
+member(X, [X|Xs]).
+member(X, [Y|Ys]) :- member(X, Ys).
+
+The same program in Schelog reads
+
+(define %member
+  (rel (x xs y ys)
+    ((x (cons x xs)))
+    ((x (cons y ys)) (%member x ys))))
+
+It is a convention -- which can be flouted -- that all
+Schelog predicate names start with %.  This is solely to
+avoid confusion with Scheme procedures of the same name.
+Thus, the Schelog predicate for append is named %append so
+as not to clash with Scheme's append.  The % is not
+mandatory however -- you may use any naming system that
+pleases you.
+
+Relations are defined using the form rel.  rel is followed
+by a list of identifiers, these being the names of the logic
+variables used in the definition of the relation.  There is
+no naming convention involved here such as the
+initial-capital convention of Prolog.  rel introduces the
+list of rules corresponding to the relation.
+
+For Prolog's |, simply use Scheme's cons.  In general,
+Scheme's data structures can be used without any massaging
+in Schelog.
+
+The if-then-else predicate in "real" Prolog reads
+
+if_then_else(P, Q, R) :- P, !, Q.
+if_then_else(P, Q, R) :- R.
+
+The same thing in Schelog reads
+
+(define %if-then-else
+  (rel (p q r)
+    ((p q r) p ! q)
+    ((p q r) r)))
+
+The cut is written !, as in Prolog.  Anonymous variables are
+written (_) -- thus %member could be rewritten as
+
+(define %member
+  (rel (x xs)
+    ((x (cons x (_))))
+    ((x (cons (_) xs)) (%member x xs))))
+
+which corresponds to
+
+member(X, [X|_]).
+member(X, [_|Xs]) :- member(X, Xs).
+
+This should give you a feel for Schelog's syntax.  If not,
+read some of the example files provided.
+
+The interactive Prolog queries (?-) are handled with the
+form `which'.  Type a which-query just as you would any
+Scheme expression that you'd want to evaluate, i.e., at the
+Scheme prompt.
+
+> (which () (%member 1 '(1 2 3)))
+
+corresponds to
+
+?- member(1, [1, 2, 3])
+
+and returns
+
+()
+
+This means that the goal succeeded, but since no variables
+were requested in the answer, you get an empty list.  To get
+more solutions, type (more).  This is like saying yes to
+Prolog's more? prompt.  Here, for instance, typing (more)
+gives you #f, falsity signifying that there are no alternate
+solutions to this goal.  (Note that this distinction between
+a false answer and a true answer with no variables to
+instantiate is lost in Schemes where #f and () are
+identical.  Mercifully, this is easily remedied -- simply
+use a dummy which-variable in such cases.)
+
+For another example, consider the query
+
+> (which (x) (%member x '(1 2 3)))
+
+Here you want an instantiation for x in the solution.  Sure
+enough, the result of this expression is
+
+((x 1))
+
+viz., a list containing the logic variable bindings
+requested.  Here there is only one variable x, and its
+binding is 1.
+
+Typing (more) gives more solutions
+
+> (more)
+((x 2))
+
+> (more)
+((x 3))
+
+> (more)
+#f
+
+The final #f shows that there are no more solutions.
+
+One could also have queries of the form
+
+> (letref (x ...) (which (y ...) query))
+
+Both letref and which introduce local logic variables (much
+like Scheme's let).  However, in the solutions, only the
+which-variables are enumerated.  E.g.,
+
+> (letref (x) (which () (%member x '(1 2 3))))
+
+succeeds three times, without giving the values of x.
+
+()
+> (more)
+()
+> (more)
+()
+> (more)
+()
+> (more
+#f
+
+Since Schelog relations are just Scheme procedures, one can
+use lexical scoping to define auxiliary relations, e.g.,
+%reverse using an auxiliary that employs an accumulator (see
+toys.scm).  One is also not tied to the Prolog style --
+regular Scheme can be used too, treating Prolog relations as
+just another paradigm used for local convenience along with
+the other paradigms of Scheme.

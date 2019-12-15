@@ -1,0 +1,47 @@
+\section{マクロ機能を持たないSchemeのために}
+\label{sec:app:flip}
+\par
+もしかしたら、あなたが利用できるSchemeの処理系にはマクロが備わっていない
+かもしれない。しかしその場合にも\verb$amb$と同様のことが簡単に行える。
+\verb$amb$をマクロとして定義しなければならない理由は、\verb$(fail)$に出会った
+ためにやむを得ない場合を除いて、一方の引き数を評価して欲しくないからであった。
+ところで、特殊形式の\verb$if$はこの条件を満たしている。つまり次のように定義して
+おけば、\verb$(amb exp1 exp2)$の代わりに\verb$(if (flip) exp1 exp2)$として
+同様のことが行える。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define %amb-catchers-stack%
+    (make-stack))
+
+(define (flip)
+  (call-with-current-continuation
+   (lambda (-c-)
+     ((%amb-catchers-stack% 'push)
+      (delay (-c- #f)))
+     #t)))
+
+(define (fail)
+  (if (%amb-catchers-stack% 'empty?)
+      (error "FAIL evaluated.")
+      (force
+        (%amb-catchers-stack% 'pop))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\par
+ただし、だからといって次のように\verb$amb$を定義することは誤りである。
+\medskip
+\begin{nquote}{4ex}
+\baselineskip=10pt
+\begin{verbatim}
+(define (amb exp1 exp2)
+  (if (flip) exp1 exp2))
+\end{verbatim}
+\end{nquote}
+\medskip
+これでは\verb$amb$を呼びだしたときに、\verb$exp1$と\verb$exp2$の両方の引き数が
+評価されてしまう
+からである。
+\bigskip

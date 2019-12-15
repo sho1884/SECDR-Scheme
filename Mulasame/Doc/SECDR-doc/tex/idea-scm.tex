@@ -1,0 +1,191 @@
+\section{ISWIMからIdealized Schemeへ}
+\label{sec:ISWIMtoIS}
+\medskip
+\par
+Landinによる関数型言語ISWIMは、以下に示す文法のλ算法の式で作られた値呼びの言語であった。
+$$ N::= x \; |\; NN\; |\; \lambda x.N$$
+ここで$ x$は変数である。
+\medskip
+\par
+ISWIMの操作的意味論は、LandinによってSECDマシンの項で定義された。
+Plotkinは、この定義が（部分的に）関数\eval に等しいことを示した。
+（定数とその評価は無視することにする。）
+\medskip
+\begin{description}
+\item[1.] $ \evalv (V)=V$
+\item[2.] $ \evalv (MN)= \evalv (Q[V/x])$\\
+ただし、$ \evalv (M)=\lambda x.Q$ かつ $ \evalv (N)=V$である。
+また、各々の$ V$は値を表している。ここで値は変数であるかλ抽象であると
+定義されている。
+\medskip
+\end{description}
+\par
+以下においては、メタ変数$ V,V_{1},V_{2},\cdots$は変数を表すものとする。
+表記法$ M[N/x]$は、$ M$における$ x$の全ての自由変数としての出現を$ N$に
+置き換えることを示す。$ (\lambda x.M)V$の形をした式は、
+\betav -redexと呼ばれる。関数\eval は、各々のステップにおいてλ抽象の
+スコープの内側ではなく、最左最外の\betav -redexを簡約するものとする。
+\medskip
+\par
+Felleisenは、評価コンテクスト\footnote{コンテクストとは、ある一つの出現位置が空に
+なっている項である。コンテクスト一般を$ E[\:]$で表す。$ E[\:]$は項のメタ表記であり、
+項そのものではないことに注意。}の項において、この評価順序を形式化していた。
+ISWIMが評価するコンテクスト$ E$は、次のように帰納的に定義される。
+$$ E::= [\:]\; |\; EN\; |\; VE$$
+ここで$ [\:]$は"hole"を表す。
+\par
+もし$ E$が評価コンテクストであるならば、$ E[M]$は$ E$のholeにおいて$ M$を
+置いて得られる結果の項を示す。任意の閉じた項\footnote{閉じた項とは、その項に含まれる
+自由変数の集合が空である項のことである。} $ M$が値であるか$ M=E[R]$という形で
+表すことができることを容易に示すことができる。ここで$ R$は\betav -redexである。
+また$ R$はλ抽象の内側ではなく、$ M$の最左最外\betav -redexである。
+表記$ M\propto E[R]$は$ E[R]$が$ M$のこのユニーク表現であることを意味している。
+例えば、もしも$ E_{0}=(\lambda x.M)[\:]$で、$ E_{1}=[\:]$であるならば、以下のように
+なる。
+$$ (\lambda x.M)V=E_{0}[V]\propto E_{1}[(\lambda x.M)V]$$
+\par
+ある評価コンテクストと\betav -redexの項における任意の値ではないもののユニーク
+表現は、コンテクスト書き換え規則を生む。
+$$ E[(\lambda x.M)V]\betareduct E[M[V/x]]\;\;\;\;\;\;(\betareduct )$$
+この反射推移閉包$\betareduct^{*}$は\eval に等しい。
+\medskip
+\begin{定理}
+$$ \evalv (M)=V \;{\bf iff}\; M\betareduct ^{*} V$$
+\end{定理}
+\medskip
+\par
+言い替えれば、$\betareduct $はISWIMの抽象化した操作的意味論を与えるということである。
+ISWIMの項$ M$は$ M\betareduct ^{*} V$のとき、かつその時に限って$ V$であると
+評価される。評価コンテクストの表記法は、項の表記中にその部分項が評価されるときの作法を
+明解に描き出す\footnote{$\betareduct ^{k}$という表記は$\betareduct$規則のk回の適用を
+示す。}。
+\medskip
+\begin{定理}~
+\label{theorem:contextbeta}
+\begin{description}
+\item[1.] $ E[M]\betareduct ^{k} E[N]$ ならば $ M\betareduct ^{k} N$
+\item[2.] $ E[M]\betareduct ^{*} V$
+ならば $ E[M]\rightarrow ^{*} E[V_{0}]\betareduct ^{*} V$であるような$ V_{0}$が
+存在する。
+\medskip
+\end{description}
+\end{定理}
+\par
+次の評価のシーケンスにおける任意のi番目について、
+$$ M_{0}\betareduct M_{1}\betareduct \cdots \betareduct M_{i}\betareduct \cdots$$
+もし、$ M_{i}=E[N]$で、かつ$ N$が値ではないとき、その部分項に影響する計算に
+ついての評価シーケンスを続ける前に、$ E$はこの$ N$を値に評価するのを"wait"しな
+ければならない。それは$ E$が評価された後になされる計算の残りの部分を表していると
+いうことである。コンテクスト$ E$は評価シーケンスにおけるこのポイントにおいての
+$ N$の継続（あるいは制御コンテクスト）と呼ばれる。評価コンテクストのこの表記は、
+以下でみるように、継続を扱うオペレータの操作的意味論の簡潔な仕様を与える。
+\medskip
+\par
+FelleisenはISWIMへコンテクストを操作する二つの構成子を組み込んだIdealized Scheme
+あるいはISと呼ばれる式を与えた\footnote{ここでは、Idealized Schemeのassignment-freeな
+sub-languageのみを取り扱う。}。ISの式はISWIMの文法を拡張することによって以下のように
+定義される。
+$$ N::=\cdots \abort (N)\; |\; \control (N)$$
+\par
+オペレータ$\abort$と$\control$は、それぞれabortとcontrolと呼ばれる。ISにおいては、
+任意の閉じた項Mは変数であるか$ M=E[R]$といったユニークに書き表されるものである。
+ここで$ R$は\betav -redexか$ R=\abort (N)$であるか$ R=\control (N)$で
+あるかの何れかである。形式的ではなく述べると、$ \abort (M)$の評価は$ M$の評価に
+おいて現在の評価コンテクストと継続を捨てる。このことは、コンテクスト書き換え規則として
+表現される。ここでコンテクストの評価の定義は、次のように明白な方法でISの式が拡張された
+ものとなっている。
+$$ E[\abort (M)]\abortreduct M\; \; \; \; \; \; (\abortreduct )$$
+\par
+$ \control (M)$の操作的意味論は、形式的ではないが、以下のように詳述できる。
+$\abort $と同じ様に、$ E[\control (M)]$の評価は制御コンテクスト$ E$を捨てる。
+そして項$ M$は捨てられた制御コンテクストの手続き的な抽象に適用される。
+もしこの手続きが任意のコンテクスト$ E_{1}$において値$ V$をもって呼び出されると、
+$ E_{1}$は捨てられ、$ E[V]$として評価を再開する。これは次の規則として表現される。
+$$ E[\control (M)]\controlreduct M\lambda z.\abort (E[z])\; \; \; \; \; \; (\controlreduct )$$
+\par
+オペレータ$\abort $は次のように$\control $の項において定義され得る。
+$$ \abort (M)\stackrel{\it def}{=} \control (\lambda d.M)$$
+ここで$ d$は$ M$において自由ではないダミー変数である。
+\begin{eqnarray}
+ E[\abort (M)] & = & E[\control (\lambda d.M)] \nonumber \\
+               & \controlreduct & (\lambda d.M)\lambda z.\abort (E[z]) \nonumber \\
+               & \betareduct & M \nonumber
+\end{eqnarray}
+\par
+それゆえに、$ \abort (M)$は定義された構成子として論じられ、規則$\betareduct$と
+$\controlreduct$はISの操作的意味論の定義として論じられる。表記$\unionreduct$は
+二つの評価規則の和を示す。
+\medskip
+\par
+$\control$の操作的意味論は、\verb$call/cc$のそれとは、$\control$がその使用する位置へ
+戻ることを必要としないという点で異なっている。ISに\verb$call/cc$を加えた変形を$\callcc $
+と呼び、それは次の評価規則を持つことになる。
+$$ E[\callcc (M)]\callccreduct E[M\lambda z.\abort (E[z])]\;\;\;\;\;\;(\callccreduct )$$
+\par
+しかし、この追加は、計算上$\callcc $に等しいオペレータが次のように定義できるので、
+必要ではない。
+$$\callcc _{d}({ M})\stackrel{def}{=}\control (\lambda { k.k(Mk)})\;\;\;\;\;\;(\callcc _{d})$$
+\par
+$\callcc_{d}$の一つの使用例として、Common Lispの特殊形式\verb$catch/throw$
+\footnote{訳者注: 
+ただし、ここでいう\verb$catch/throw$はCommon Lispのそれとは次のように若干文法が異なる。
+\medskip
+\begin{description}
+\item[Common Lisp:]\verb$(catch 'tag ... (throw 'tag val) ...)$
+\item[Scheme:]\verb$(catch tag ... (tag val) ...)$
+\medskip
+\end{description}
+\par
+余談ではあるが、SECDR-schemeでは以下のように定義すればよいものである。\\ 
+\par
+~\\
+\verb$(macro catch$~\\
+~~~~\verb$  (lambda (l) (let ((tag (cadr l)) (body (cddr l)))$~\\
+~~~~~~\verb$　  `(call/cc (lambda (,tag) ,@body)))))$~\\
+\medskip
+\par
+この\verb$catch$は、セクション\ref{sec:continuation}で示したCommon Lispと同様のものとは違って、\verb$catch$式の
+外側からでも起動することができる。それゆえ、\verb$(catch x x)$は
+\verb$(current-continuation)$に等しい。また、逆に\verb$call-with-current-continuation$
+は、この\verb$catch$を用いて以下のように定義できる。
+\medskip
+\par
+\verb$(define (call/cc proc) (catch z (proc z)))$
+}
+と同様のメカニズムをインプリメントすることがある。
+\par
+$ E_{0}[\callcc_{d}(\lambda j.M)]$の評価を現在のコンテクストに名前jを用いて
+ラベル付けする"catch"と考える。$ M$の評価中に$ j$が全く呼び出されないか
+"throw"されるならば、この式は"normally"を返す。
+一方、$ M$の評価中に$ E_{1}[jV]$のように$ j$の適用に出会うならば、
+値$ V$は$ j$によってラベル付けされた位置へ"throw back"される。
+それは、コンテクスト$ E_{1}$が捨てられ$ E_{0}[V]$の残りが評価されることである。
+以下でIdealized Schemeの評価規則として、いかにこれが完結するかを示す。
+\medskip
+\par
+もし$ Q=\lambda z.\abort (E_{0}[z])$ならば
+\begin{eqnarray}
+ E_{0}[\callcc _{d}(\lambda j.M)] & \controlreduct & (\lambda k.k((\lambda j.M)k))Q \nonumber \\
+                                  & \betareduct    & Q((\lambda j.M)Q) \nonumber \\
+                                  & \betareduct    & Q(M[Q/j]) \nonumber
+\end{eqnarray}
+\par
+もしも$ M[Q/j]\betareduct ^{*}V$ならば評価は以下について"normally"を返す。
+\begin{eqnarray}
+ & \betareduct ^{*} & QV \nonumber \\
+ & \betaorigreduct  & \abort (E_{0}[V]) \nonumber \\
+ & \abortreduct     & E_{0}[V] \nonumber \\
+ & \cdots           & \cdots \nonumber
+\end{eqnarray}
+\par
+一方、もし値が結局throwされるならば、
+\begin{eqnarray}
+Q(M[Q/j]) & \betareduct ^{*} & E_{1}[QV] \nonumber \\
+          & \betareduct      & E_{1}[\abort (E_{0}[V])] \nonumber \\
+          & \abortreduct     & E_{0}[V] \nonumber \\
+          & \cdots           & \cdots \nonumber
+\end{eqnarray}
+\par
+これはコンテクスト$ E_{1}$が捨てられて、復元されたコンテクスト$ E_{0}$において
+$ V$の評価が続くことを示している。
+\medskip

@@ -1,0 +1,1008 @@
+
+                           仮称: 叢雨(Mulasame 0.9)言語
+                    (並列版SECDR-Schemeプロトタイプ)について
+                                   (ドラフト)
+                                                         平成6年9月23日
+   
+        Copyright (C) 1990, 1991, 1992, 1993, 1994  Shoichi Hayashi (林 祥一)
+
+------------------------------------------------------------------------------
+
+  概要
+
+   Mulasameは、SECDR-Scheme1.0を並列化したものです。もちろん、並列化によって
+   生じる同期と通信の問題の回避のために必要なセマフォ等のプリミティブも追加
+   されています。また同時に提供されるライブラリは、よく知られたもっと高レベ
+   ルの通信や同期機構などを含んでいます。
+
+   一方、並列化にあたって、SECDR-Scheme1.0の仕様に対しては何の制限も加えてい
+   ません。set!やwrite, read等の副作用があるものであっても、どのプロセスも全
+   く何も制限されることなくこれを実行することができます。これによってユーザ
+   は、同期や通信のための機構を含む独自の制御構造を新たに定義することが容易
+   にできます。しかし逆に言えば、このような副作用を伴うものを直接呼び出す場
+   合には、これによって生じる問題は全てユーザ自身の責任で回避しなければなり
+   ません。
+
+------------------------------------------------------------------------------
+
+  動作環境
+
+   UNIXとMac上で動作するように作成されています。現状動作確認しているのはSun 
+   OS4.1.2上でBSD系のccとgcc2.6, System V系の/usr/5bin/ccとによってコンパイ
+   ルしたものと、MacintoshのA/UX3.0.1のccとgccによってコンパイルしたもの、Ma
+   cintoshのMacMiNTのgccによってコンパイルしたもの、MacintoshのThink C 7.0に
+   よってコンパイルしたものだけです。
+
+   MacのASL-EditのToolとしては、リソースのサイズがその制限を越えてしまうため
+   に実現不可能なようです。また、おそらくMS-DOS, MacでもMPWではそのままでは
+   コンパイルできないでしょう。SECDR-Scheme1.0に比べると移植性は悪くなってい
+   ます。しかしそれは、Mulasameの次の一点の仕様を実現するための理由だけによ
+   るものです。
+
+   一般には入出力の一命令を実行中にMulasameのプロセスが切り替わることはあり
+   ません。ですから、例えば(read)を実行すると、完全な一つの式(すなわち例えば
+   リストの場合は括弧の対応がとれるまで)が入力されるまでは、他のプロセスは全
+   て停止します。
+
+   ところで、MasterのCPUで実行されるメインのプロセスは、他のプロセスを制御し
+   たり、その状態をみたりできるように、他のプロセスが実行中であってもインタ
+   ラクティブに指示を出せるように、トップレベルの入力待状態にしておきたいこ
+   とはよくあることです。もしもこの入力待状態の時も全ての他のプロセスが停止
+   してしまうとすれば、非常に不便なこととなってしまいます。
+   これを解決する方法を、二つ用意しています。
+
+   一つの方法は、MasterのCPUのREAD-COMPILE-EXEC-PRINTのループにおいてもSUB-C
+   PUの実行を可能とするために、タイマーによる割り込み処理を利用するものです。
+   すなわち、SIG_ALARMによりSUB_CPUが定期的に起動されます。コンパイルオプショ
+   ンとして、-DBSDALRMを指定するとこの方法での実行形式が生成されます。ところ
+   でこの方法では、入出力命令中にsignalが発生した場合に、その割り込み処理か
+   らの復帰後の動作が問題になります。BSD系は何事もなかったように復帰できます
+   が、System V系は入出力命令が失敗したように振る舞うようです。したがって、
+   この方法はBSD系のみで有効です。しかし、BSD系であってもこの方法はあまりお
+   奨めできません。理由は、割り込みタイマーの最小単位時間CPUが遊んでいる状態
+   となり、実行速度が確実に低下するからです。
+
+   もう一つの方法は、UNIX上の場合、標準入力からのトップレベルでの各式の入力
+   時において、その一行目(プロンプトの出ている状態から、最初の改行が入力され
+   るまで)の入力についてのみは、入力が無くてもgetc()がブロックされないように
+   し、入力が無いときにはSUB-CPUを起動するという方法です。そして、一行目の入
+   力だけはバッファリングを独自に行います。
+   すなわち、MasterのCPUのトップレベルでのREAD-COMPILE-EXEC-PRINTのループに
+   おける一行目の入力中は、他のSUB-CPUのプロセスは停止することなく実行できる
+   ようになっています。
+   一行目の意味は、プロンプトの出ている状態から最初の改行が入力されるまでの
+   ことで、例えば以下のような入力を行った場合、
+   
+   > (define
+        a 0)
+   a
+   >
+   
+   "(define"を入力している間は、他のプロセスは動いています。" a 0)"の行を入
+   力中は、他のプロセスは停止します。ここまで入力してプロンプトが出ると再び
+   他のプロセスは動きはじめます。
+   これを実現するためには、getchar()がブロックしないように設定できる必要があ
+   ります。(手元で動いていたSun OS上の少し古いgcc version2.3.3では、どういう
+   わけかこの設定が無視されてしまいました。)そこで、Mulasameのインストールを
+   行うまえに、input-test.cをコンパイルし、OK!が表示されることを確認してみて
+   ください。
+
+    例えば、
+    % cc -o input-test input-test.c
+    % input-test
+    Hit Return Key!
+    Hit Return Key!
+    OK!
+    %
+
+   上述のinput-testの結果OK!ではなくError!が表示された場合は、仕方ありません。
+   トップレベルが入力待ちのときにSUB-CPUを起動したい場合は、以下のように定義
+   されている(run)を実行してください。
+   
+       (define (run)(%task-switch%)(run))
+   
+   そしてトップレベルから何か指示を出したいときには、^Cでインタラプトをかけ
+   て、トップレベルの入力待ちに戻ってください。指示を出し終わったら、再び(ru
+   n)を実行すればSUB-CPUでの計算の続きが起動されます。
+   Mac版の方は何もイベントが発生していないときには、SUB-CPUを起動するように
+   しています。Think Cのconsoleライブラリを利用していますので、イベント待ち
+   ループはこのconsoleライブラリの中に記述されています。ようするにThink CのA
+   NSIのライブラリにパッチを当てています。
+
+------------------------------------------------------------------------------
+
+  マニュアル
+   [並列]
+    SECDR-Scheme1.0からの拡張部分について、以下に説明します。
+
+    (require <LIBNAME>)                     procedure
+
+     secdrlib, 「水たまり」ライブラリ, 「Linda」等に関して、以下のような対応
+     で、<LIBNAME>で指定したものをロードします。
+     (slibのrequireも有効となるように、対応してあります。)
+     
+         'mizutamari      "mizutamari"
+         'linda           "linda"
+         'amb             "amb"
+         'pcall           "pcall"
+         'module          "module"
+         'schelog         "schelog"
+         'methods         "methods"
+         'meroon          "meroon"
+         'tiny-clos       "tiny-clos"
+
+    (gencpu)                                procedure
+
+     仮想的なCPUを新たに一つ生成し、first-class objectとして返します。仮想CP
+     Uのfirst-class objectの表示形態は、その状態によって以下のように変化しま
+     す。idは単に生成された順にふられる番号です。
+     (Masterが0, Slaveが1なので、2から始まる番号です。)
+     
+         #<CPU id: 2>
+             初期状態または終了状態でCレジスタに何もセットされて
+     　　　　いない場合です。
+         #<PROCESS id: 2>
+             実行すべき命令列を持っていて、以下の場合以外です。
+             (実行中とは限りません。)
+         #<WAIT-PROCESS id: 2>
+             プレースホルダが具体化するのを待っている場合です。
+         #<SEMWAIT-PROCESS id: 2>
+             セマフォーによってWAIT状態になっている場合です。
+         #<ERROR-PROCESS id: 2>
+             エラーによって強制的に停止されている場合です。
+
+    (peval <EXP> <CPU>)                     procedure
+
+     evalの並列版です。式<EXP>をトップレベルの環境でコンパイルし、評価するよ
+     うに、仮想CPUである<CPU>のレジスタをセットします。
+     （この状態では、実行は開始されません。）
+     そして、この評価結果が格納されることになるプレースホルダを一つ生成し、
+     それをfirst-class objectとして返します。
+
+    (migrate <CLOSURE> <CPU>)               procedure
+
+     関数閉包<CLOSURE>を仮想CPUである<CPU>へマイグレートし、<CPU>のレジスタ
+     をこれを評価するようにセットします。
+     （この状態では、実行は開始されません。）
+     そして、この評価結果が格納されることになるプレースホルダを一つ生成し、
+     それをfirst-class objectとして返します。
+
+    (wakeup-cpu <CPU>)                      procedure
+
+     仮想CPUである<CPU>の実行を開始します。スケジューラのキューである-*-proc
+     ess-*-に<CPU>を追加します。そしてこの-*-process-*-を返します。
+
+    (make-place-holder)                     procedure
+
+     値が具体化(instantiate)されていないプレースホルダを一つ生成し、それをfi
+     rst-class objectとして返します。
+
+    (place-holder-set! <OBJ1> <OBJ2>)       procedure
+
+     <OBJ1>が具体化(instantiate)されていないプレースホルダであれば、その値を
+     <OBJ2>に具体化します。そうでなければエラーとなります。
+     (一度具体化されたプレースホルダを再び具体化しようとするとエラーになりま
+     す。すなわち、破壊的代入は許されず、ただ一度だけ値を設定することができ
+     るということです。)
+
+    (place-holder? <OBJ>)                   procedure
+
+     <OBJ>がプレースホルダであれば#tを、そうでなければ#fを返します。
+
+    (future? <OBJ>)                         procedure
+
+     <OBJ>がプレースホルダであり、その値がまだ具体化(instantiate)されていな
+     ければ#tを、それ以外の場合は#fを返します。
+
+    (%ph-object% <OBJ>)                     procedure
+
+     <OBJ>がプレースホルダであるならばその値を、そうでなければ<OBJ>自身を返
+     します。プレースホルダの値がinstantiateされていない場合はエラーになりま
+     す。
+
+    (%touch% <OBJ>)                         procedure
+
+     <OBJ>自身を返しますが、<OBJ>がプレースホルダであり、その値がinstantiate
+     されていない場合には、値がinstantiateするのを待ってから返します。
+
+    (future <EXP>)                          macro
+
+     それが呼ばれた環境での<EXP>の評価を並列に開始し、その結果が格納されるプ
+     レースホルダを返します。以下のように定義されています。
+      (macro future
+        (lambda (l)
+          `(let* ((cpu (gencpu))
+              (ans (migrate (lambda () ,@(cdr l)) cpu)))
+             (wakeup-cpu cpu)
+             ans)))
+
+    (touch <OBJ>)                           procedure
+
+     <OBJ>がプレースホルダであればその値を、そうでなければ<OBJ>自身を返しま
+     す。プレースホルダがinstantiateされていない場合はinstantiateするのを待っ
+     てから返します。以下のように定義されています。
+      (define (touch proc)
+        (%ph-object% (%touch% proc)))
+
+    (fcons-stream <OBJ> <STREAM>)           macro
+
+     以下のように定義されています。
+      (macro fcons-stream (lambda (l)
+          `(cons ,(cadr l) (future ,(caddr l)))))
+
+    (tail <STREAM>)                         procedure
+
+     delayのみではなく、futureにも対応できるように、以下のように定義が変わっ
+     ています。
+      (define (tail stream)
+        (if (place-holder? (cdr stream))
+            (touch (cdr stream))
+            (force (cdr stream))))
+    (cobegin <EXP> ...)                     macro
+
+     <EXP> ... を並列に評価します。<EXP>...それぞれのプレースホルダをリスト
+     にして返します。以下のように定義されています。
+      (extend-syntax (cobegin)
+         ((cobegin x) (cons (future x) nil))
+          ((cobegin x y ...)
+          (cons (future x) (cobegin y ...))))
+
+    (exbegin <EXP> ...)                     macro
+
+     <EXP> ... を排他的に逐次評価します。<EXP>...全ての評価が終了するまでタ
+     スクの切替えは起こりません。すなわち(exbegin ...)内部の評価中は他のプロ
+     セスは全て停止します。従って(exbegin ...)の評価は短時間で終了するもので
+     あることが望まれます。また、真に必要な場合以外は使用するべきではありま
+     せん。以下のように定義されています。
+      (macro exbegin
+        (lambda (l)
+          `(begin (%task-switch-off%)
+              (let ((ans (begin ,@(cdr l))))
+                (%task-switch-on%)
+                ans))))
+
+    (race <LIST>)                           procedure
+
+     プレースホルダのリスト<LIST>を早く計算が終わったもの順に並べ替えたスト
+     リームにして返します。以下のように定義されています。
+      (define (race l)
+         (if (null? l)
+            nil
+            (do ((previous nil procp)(procp l (cdr procp)))
+            ((or (null? procp)(not (future? (car procp))))
+             (cond ((null? procp)(race l))
+               ((null? previous)
+                (cons (%ph-object% (car l))
+                      (future (race (cdr l)))))
+               (else (set-cdr! previous (cdr procp))
+                     (cons (%ph-object% (car procp))
+                           (future (race l)))))))))
+
+    (gensemaphore)                          procedure
+    (gensemaphore <INIT>)                   procedure
+
+     セマフォーを一つ生成し、first-class objectとして返します。<INIT>は一般
+     セマフォーの初期値です。これが省略された場合には、２進セマフォーである
+     と仮定し、値を1にセットします。
+
+    (wait <SEMAPHORE>)                      procedure
+
+     Dijkstraのもともとの表記ではP(passerenまたはprolagen)であったものです。
+
+    (signal <SEMAPHORE>)                    procedure
+
+     Dijkstraのもともとの表記ではV(vrygevenまたはverhogen)であったものです。
+
+    (iostream <EXP> ... )                   macro
+
+     <EXP> ... はconsoleへの入出力命令列であるべきです。これを実行中に他のプ
+     ロセスからの入出力命令が割り込むことを排除します。
+     逆に、他のプロセスがこれを実行中であれば、自分が割り込むことをせず、そ
+     れが終了するのを待ちます。すなわち相互排除を実現します。
+     (もっとも他のプロセスの入出力命令がiostreamで囲まれていなければ、割り込
+     まれてしまうのですが、、、特にトップレベルのREAD-COMPILE-EXEC-PRINTルー
+     プにおける入出力はiostreamで囲まれていません。
+     このことは、Macintosh版の場合はSUB-CPUの入出力は通常SubWindowで行われる
+     ので問題になりませんが、そうでない場合はトップレベルのプロンプトの出て
+     いる画面に割り込むことがあるので注意が必要です。)
+     以下のように定義されています。
+      (macro iostream (lambda (l)
+          `(begin (wait console-semaphore)
+                  ,@(cdr l)
+                  (signal console-semaphore))))
+
+    (%task-switch%)                         procedure
+
+     直後に強制的にタスクを切替えます。
+
+    (%task-switch-on%)                      procedure
+
+     タスク切替えを許可する状態にします。デフォルトはこの状態であり、また、
+     通常はこの状態であるべきです。常に#tを返します。
+
+    (%task-switch-off%)                     procedure
+
+     直後からタスク切替えを許可しない状態にします。この状態に入るということ
+     は、次に(%task-switch-on%)を実行するまで、全ての他のタスクを停止させて
+     しまうことを意味します。真に必要な場合以外は使うべきではありません。常
+     に#fを返します。
+
+    (%task-switch?%)                        procedure
+
+     タスク切替えを許可する状態であれば#tを、そうでなければ#fを返します。
+
+    (%cpu-step%)                            procedure
+    (%cpu-step% <CPU>)                      procedure
+
+     <CPU>がタスク切替えを起こす間隔(抽象マシンのステップ数)を返します。<CPU
+     >が省略された場合はMasterのCPUに関する値を返します。
+
+    (%cpu-step-set!% #t <VAL>)              procedure
+    (%cpu-step-set!% <CPU> <VAL>)           procedure
+
+     <CPU>がタスク切替えを起こす間隔(抽象マシンのステップ数)に<VAL>の値を設
+     定します。最初の引数が#tであるときはMasterのCPUに関する値を設定します。
+     当然ながら、<VAL>は正の整数でなければなりません。
+
+    (%cpu-status%)                          procedure
+    (%cpu-status% <CPU>)                    procedure
+
+     <CPU>の状態を以下のような整数値で返します。
+     
+          TERMINATE 0
+          SUSPEND   1
+          WAIT      2
+          SEMWAIT   3
+          ERRORSUSPEND -1
+     
+     <CPU>が省略された場合はMasterのCPUに関する値を返します。
+
+    以下の変数はスケジューラが利用するキューを参照するためのものです。
+
+     スケジューラの動作を熟知していない場合には、特に-*-process-*-, -*-wait-
+     process-*-, -*-sem-wait-process-*-は参照するだけかnilにクリアする程度の
+     操作に止めておくべきです。
+
+    -*-process-*-                           variable
+
+     実行中のプロセスのリストです。
+
+    -*-wait-process-*-                      variable
+
+     プレースホルダがinstantiateされるのを待っているプロセスのリストです。
+
+    -*-sem-wait-process-*-                  variable
+
+     セマフォーによってWAITしているプロセスのリストです。
+
+    -*-error-cpu-*-                         variable
+
+     実行中にエラーを起こしたプロセスのリストです。
+
+    -*-terminate-*-                         variable
+
+     終了したプロセスのリストです。ただし、以下の-*-backup-cpu-*-の値がnilの
+     時に終了したプロセスは、ここには保存されずに捨てられます。
+
+    -*-backup-cpu-*-                        variable
+
+     この値がnil以外であれば、実行を終了したプロセスのための仮想CPUを-*-term
+     inate-*-に保存します。
+
+    (report)                                procedure
+
+     プロセスの状態とその数を報告します。以下のように定義されていますので、
+     この報告を行っている最中にも状況の変化が有り得ます。合計があわない場合
+     はそのためです。目安程度に利用してください。
+      (define (report)
+         (display "======================")(newline)
+         (display " terminate cpu:")
+         (display (length -*-terminate-*-))(newline)
+         (display " active    cpu:")
+         (display (length -*-process-*-))(newline)
+         (display " wait      cpu:")
+         (display (length -*-wait-process-*-))(newline)
+         (display " sem wait  cpu:")
+         (display (length -*-sem-wait-process-*-))(newline)
+         (display " error     cpu:")
+         (display (length -*-error-cpu-*-))(newline)
+         (display "======================")(newline))
+
+-----
+
+   タートルグラフィックスについては、詳しく説明しませんので、以下を参考にし
+   て下さい。
+    ( 注意： y軸が下を向いていますので、turn-right, turn-leftは、
+             それぞれ逆に曲がるように見えることに注意して下さい。)
+
+    (help-gr)                               procedure
+
+     Ret   Name               nargs    args        returns
+     ---------------------------------------------------------
+     B  graphics-avail?         0       -          #t if graphics available
+     B  graphics-mode!          0       -          #f if no graphics
+     B  text-mode!              0       -          #t on success
+     B  clear-graphics!         0       -          #f if not in graphics mode
+     i  max-x                   0       -          maximum value of x
+     i  max-y                   0       -          maximum value of y
+     i  max-color               0       -          maximum value of color
+     B  valid-xyc?              3       x y color  #t if valid
+     B  set-dot!                3       x y color  #t on success
+     i  get-dot                 2       x y        color of the dot in (x,y)
+                                                   or #f if (x,y) not legal
+     
+     NOTE: Origin (0,0) is in the upper left corner.
+     
+     #t
+	 
+    (help-turtlegr)                         procedure
+
+     Ret   Name               nargs    args        returns
+     ---------------------------------------------------------
+     B  goto-home!              0       -          #f if not in graphics mode
+     B  goto-center!            0       -          #f if not in graphics mode
+     B  goto-nw!                0       -          #f if not in graphics mode
+     B  goto-ne!                0       -          #f if not in graphics mode
+     B  goto-sw!                0       -          #f if not in graphics mode
+     B  goto-se!                0       -          #f if not in graphics mode
+     B  draw                    1       length     #t if target within drawing area
+     B  draw-to                 2       x y        #t if (x,y) within drawing area
+     B  draw-to!                2       x y        #t if (x,y) within drawing area
+     B  move                    1       length     #t if target within drawing area
+     B  move-to!                2       x y        #t if (x,y) within drawing area
+     i  where-x                 0       -          current x-coordinate
+     i  where-y                 0       -          current y-coordinate
+     i  turn-right              1       angle      drawing direction in degrees
+     i  turn-left               1       angle      drawing direction in degrees
+     i  turn-to!                1       angle      drawing direction in degrees
+     i  what-direction          0       -          drawing direction in degrees
+     B  set-color!              1       color      #t if color valid
+     i  what-color              0       -          current drawing color
+     
+     #t.
+
+-----
+
+   Macintosh版に関して
+
+    注意事項
+
+     実行速度向上のため、イベント取得の間隔を決定するパラメータをやや無理の
+     ある値に設定しています。ことえりなどで半角英字を直接入力するモードにし
+     ている場合、入力文字を取りこぼすことがあります。ゆっくり入力すれば問題
+     ありませんが、頻繁にこのような状態が起こる場合は、キーボードスクリプト
+     をRomanに切り替えてください。
+
+     タートルグラフィックスは、8bitカラーまでに対応しています。(ダイレクトカ
+     ラーには対応していません。)起動した時に設定されているモニタの色階調に合
+     わせて2〜16色あるいは2〜16階調に設定されます。複数のモニタが接続されて
+     いる場合には、8bitカラーまでの範囲で最大bitのモニタに合わせて設定されま
+     す。
+
+    Macintosh版は二つのウインドウを持っています。そしてMainのウインドウに対
+    応するstdin-port, stdout-portに加えて、Subのウインドウに対応する
+    sub-stdin-port, sub-stdout-portを持っています。通常、入出力命令は、その
+    ポートを陽に指定しない場合はstdin-port, stdout-portが指定されたように振
+    る舞いますが、このMacintosh版においてはSUB-CPUにおいて実行された入出力命
+    令はsub-stdin-port, sub-stdout-portが指定されたように振る舞います。
+    Macintosh版ではウインドウのバックスクロールができませんし、emacsも利用で
+    きませんので、次のものが追加されています。
+
+    (transcript-on <FILENAME>)              procedure
+
+     <FILENAME>は文字列であるべきで、以降のMainウインドウ(console)での入出力
+     はこれによって指定される名前のファイルにも記録されます。
+     transcript-offはサポートしていませんので、一度指定すると終了するまで記
+     録し続けます。
+
+    (sub-transcript-on <FILENAME>)          procedure
+
+     <FILENAME>は文字列であるべきで、以降のSubウインドウでの入出力はこれによっ
+     て指定される名前のファイルにも記録されます。
+     sub-transcript-offはサポートしていませんので、一度指定すると終了するま
+     で記録し続けます。
+
+    (cgotoxy <X> <Y>)                       procedure
+
+     <X>, <Y> は整数であるべきで、これによって指定されるxy座標にMainウインド
+     ウのカーソル位置を移動させます。
+
+    (sub-cgotoxy <X> <Y>)                   procedure
+
+     <X>, <Y> は整数であるべきで、これによって指定されるxy座標にSubウインド
+     ウのカーソル位置を移動させます。
+
+------------------------------------------------------------------------------
+
+  実行例を示します。
+
+   mulasameを立ち上げると以下のようなメッセージとプロンプトがでます。
+
+    Mulasame (Parallel SECDR-Scheme) version 0.9,
+    Copyright (C) 1990, 1991, 1992, 1993, 1994  Shoichi Hayashi, Atsushi Moriwaki.
+    Mulasame comes with ABSOLUTELY NO WARRANTY; for details type `(terms)'.
+    
+    Scheme Turtlegraphics Copyright (C) 1992 sjm@cc.tut.fi, jtl@cc.tut.fi
+    Type `(help-gr)' or `(help-turtlegr)' for a quick reference of
+    the new primitives.
+    
+    ; loading bin-file /usr/PDS/lang/Scheme/Mulasame/boot.bin
+    ; loading scm-file /usr/PDS/lang/Scheme/Mulasame/Init.scm
+    allocate 50 new segments
+    ; loading bin-file /usr/PDS/lang/Scheme/Mulasame/parallel
+    ; loading scm-file /usr/PDS/lang/Scheme/slib/secdrscm.init
+    ; loading bin-file /usr/PDS/lang/Scheme/slib/require
+    
+    > 
+
+   さて、並列プロセスの例としてある仮想CPUをカウンタとして動作させてみましょ
+   う。
+        (define (counter cpu)
+          (let ((value 0))
+            (letrec ((loop (lambda ()(set! value (1+ value))(loop))))
+              (migrate loop cpu)
+              (lambda (msg)
+            (cond ((eq? msg 'value) value)
+                  (else (error "unknown message" msg)))))))
+    
+    まず、CPUを生成します。
+    
+    > (define cpu (gencpu))
+    ; Evaluation took 0 Seconds (0 in gc).
+    cpu
+    
+    このCPUに何をするべきかを割り当てます。
+    
+    > (define c1 (counter cpu))
+    ; Evaluation took 0 Seconds (0 in gc).
+    c1
+    
+    この状態でCPUには式を評価するための準備が行なわれ、各レジスタ等が設定さ
+    れます。すなわち副作用の結果として単なるCPUが実行可能な状態に初期化され、
+    いわばプロセスのように変化します。
+    
+    > cpu
+    ; Evaluation took 0 Seconds (0 in gc).
+    #<PROCESS id: 2>
+    
+    この状態ではプロセスはまだ起動していません。
+    ですから、
+    
+    > (c1 'value)
+    ; Evaluation took 0 Seconds (0 in gc).
+    0
+    
+    このように初期値のままです。
+    
+    プロセスを起動するためには次のように、起動したいプロセスを起こします。
+    
+    > (wakeup-cpu cpu)
+    ; Evaluation took 0 Seconds (0 in gc).
+    (#<PROCESS id: 2>)
+    
+    こうするとcpuを実行中のプロセスを示すリスト-*-process-*-にセットします。
+    (スジューラの動作を熟知していない場合は-*-process-*-を直接変更することは
+    避け、参照するだけに止めるべきです。)
+    
+    実行が終了したプロセスは自然にこのリストから消滅します。このとき-*-backu
+    p-cpu-*-がnil以外であれば終了したCPUはリスト-*-terminate-*-に保存されま
+    す。この例の場合は終了することがないので、勝手に消滅することは有り得ませ
+    ん。
+    
+    > -*-process-*-
+    ; Evaluation took 0 Seconds (0 in gc).
+    (#<PROCESS id: 2>)
+    
+    これで、このプロセスと、今対話をしているトップレベルのプロセスと計２つの
+    プロセスが並列動作していることになります。
+    
+    カウンタは刻々と変化しはじめているのを見ることができます。
+    
+    > (c1 'value)
+    ; Evaluation took 0 Seconds (0 in gc).
+    161468
+    > (c1 'value)
+    ; Evaluation took 0 Seconds (0 in gc).
+    223006
+    
+    さて、プロセスを止めるには、実行している仮想CPUを-*-process-*-, -*-wait-
+    process-*-, -sem-wait-process-*-から取り除けば良いのですが、この操作を行
+    なっている間にもこのキューは刻々と変化しているので、通常のリスト操作は危
+    険です。次のようにすると良いでしょう。
+    
+    まずインタラプトをかけます。こうするとSlaveのCPUが起動することになります
+    が、この間Masterを含めて全てのCPUが停止します。-*-error-hook-*-関数の中
+    のメニューに'K'がありますので、これで一旦全ての実行中のプロセスをキュー
+    である-*-process-*-から取り除きます。ここに入っていたものは-*-backup-pro
+    cess-*-に移動されて保存されます。再起動したいプロセスはトップレベルに戻っ
+    てから、-*-backup-process-*-に好きなようにリスト操作を行ない、wakeup-cpu
+    で再起動して下さい。
+    
+    > ^C
+    ; Interrupted!
+    List of Commands: (K, S, E, C, D, R, A, !, &, T or Help) ? k
+     Error CPU:()
+     KILL: all sub-process : (#<PROCESS id: 2>)
+    -*-process-*- -> -*-backup-process-*-
+    
+    List of Commands: (K, S, E, C, D, R, A, !, &, T or Help) ? t
+    > -*-process-*-
+    ; Evaluation took 0 Seconds (0 in gc).
+    ()
+    > -*-backup-process-*-
+    ; Evaluation took 0 Seconds (0 in gc).
+    (#<PROCESS id: 2>)
+    
+    これでプロセスを停止させたことになります。
+    
+    > (c1 'value)
+    ; Evaluation took 0 Seconds (0 in gc).
+    599929
+    > (c1 'value)
+    ; Evaluation took 0 Seconds (0 in gc).
+    599929
+    
+    このようにc1の変化は止まります。
+    
+    > (wakeup-cpu cpu)
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    (#<PROCESS id: 2>)
+    
+    このようにすると再び、停止していたプロセスが動き出すことになります。
+    
+    > (c1 'value)
+    ; Evaluation took 0 Seconds (0 in gc).
+    753775
+    > (c1 'value)
+    ; Evaluation took 0 Seconds (0 in gc).
+    823006
+
+   次は、futureを使ってストリーム並列を実行してみます。
+
+    まず、簡単な例としてnからはじまる整数列のストリームを定義してみましょう。
+    
+    以下のように定義することができます。
+    
+        (define (integersfrom n)
+          (fcons-stream n (integersfrom (1+ n))))
+    
+    すなわち、nからはじまる整数列はnにn+1からはじまる整数列を繋げたものです。
+    
+    
+    ここで、ストリームをキューのように扱い、先頭要素から一つずつ要素を取り出
+    すstream-popを定義しておきましょう。
+    
+        (macro stream-pop
+          (lambda (l)
+              (let ((n (cadr l)))
+                `(let ((ans (head ,n)))
+                   (set! ,n (tail ,n))
+                   ans))))
+    
+    > (define x (integersfrom 1))
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    x
+    > x
+    ; Evaluation took 0 Seconds (0 in gc).
+    (1 . #<Place Holder>)
+    > (stream-pop x)
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    1
+    > x
+    ; Evaluation took 0 Seconds (0 in gc).
+    (2 . #<Place Holder>)
+    > (stream-pop x)
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    2
+    > x
+    ; Evaluation took 0 Seconds (0 in gc).
+    (3 . #<Place Holder>)
+    > (stream-pop x)
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    3
+    > ^C
+
+   次にストリーム並列を利用してR-SフリップフロップをNANDゲートから構成してみ
+   ます。
+        (define (logic-nand x y)
+          (if (= 0 x)
+              1
+              (if (= 0 y)
+              1
+              0)))
+    
+    これはNANDゲートの入力値から出力値を決定する関数ですが、入出力がストリー
+    ムに対応したものは以下のように定義できます。
+    
+        (define (nand x y)
+          (fcons-stream (logic-nand (head x) (head y))
+                (nand (tail x)
+                      (tail y))))
+    
+    さらにこれを二つ組み合わせてR-Sフリップフロップは以下のように定義できま
+    す。
+    
+        (define (rs-ff s r)
+          (letrec ((t1 (fcons-stream 0 (nand t2 r)))
+               (t2 (fcons-stream 1 (nand s t1))))
+            (cons t2 t1)))
+    
+    出力が二つあるので、この二つのストリームをconsして返しています。
+    
+    これで完成ですが、入力信号を発生するクロックを作成しておきましょう。
+    
+        (define (clock tau ctime)
+          (if (< (remainder ctime tau) (* 2 (/ tau 3)))
+              (fcons-stream 1 (clock tau (1+ ctime)))
+              (fcons-stream 0 (clock tau (1+ ctime)))))
+    
+    また、各信号の状態を監視するために、以下のprobeを定義しておきます。
+    time-limitを指定する必要が無いところがストリームの良いところであり、実際
+    にリソースが許す限り計算が進むのですが、ここでは単に表示上の都合からtime
+    -limitを要求しています。
+    
+        (define (probe signal signal-name time-limit)
+          (display signal-name)
+          (display ": ")
+          (do ((ctime 0 (1+ ctime)))
+              ((<= time-limit ctime) (begin (display 'halt)(newline)))
+            (if (= 0 (stream-pop signal))
+            (display '_)
+            (display '-))))
+    
+    さて、clockやprobeも接続した回路の定義は以下のようになります。
+    
+        (define (sim time-limit)
+          (letrec ((s1 (clock 12 0))
+               (s2 (clock 12 6))
+               (s (rs-ff s1 s2))
+               (q (car s))
+               (~q (cdr s)))
+            (probe s1 "Set  " time-limit)
+            (probe s2 "Reset" time-limit)
+            (probe q  "Out  " time-limit)
+            (probe ~q "~Out " time-limit)))
+    
+    では実行してみましょう。
+    
+    > (sim 60)
+    Set  : --------____--------____--------____--------____--------____halt
+    Reset: --____--------____--------____--------____--------____------halt
+    Out  : ----_____-------_____-------_____-------_____-------_____---halt
+    ~Out : ___-------_____-------_____-------_____-------_____-------__halt
+    ; Evaluation took 0.366667 Seconds (0 in gc).
+    
+    > ^C
+
+   さて次は、並列実行指定のcobeginと、その結果を早いもの順のストリームに変換
+   するraceの実験を行っておきましょう。
+    まず、やや時間のかかる計算の例として、以下のtarai関数を使うことにします。
+    
+    
+        (define (tarai x y z)
+          (if (> x y)
+            (tarai (tarai (- x 1) y z)
+                   (tarai (- y 1) z x)
+                   (tarai (- z 1) x y))
+            y))
+    
+    では実行してみましょう。
+    
+    > (define a
+        (race
+          (cobegin (tarai 6 3 0)(tarai 4 2 0)(tarai 10 5 0)(tarai 8 4 0))))
+    ; Evaluation took 0.3 Seconds (0 in gc).
+    a
+    > a
+    ; Evaluation took 0 Seconds (0 in gc).
+    (4 . #<Place Holder>)
+    > (stream-pop a)
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    4
+    > a
+    ; Evaluation took 0 Seconds (0 in gc).
+    (6 . #<Place Holder>)
+    > (stream-pop a)
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    6
+    > a
+    ; Evaluation took 0 Seconds (0 in gc).
+    (8 . #<Place Holder>)
+    > (stream-pop a)
+    ; Evaluation took 67.7333 Seconds (20.2333 in gc).
+    8
+    > a
+    ; Evaluation took 0 Seconds (0 in gc).
+    (10 . #<Place Holder>)
+    > (stream-pop a)
+    ; Evaluation took 0.0333333 Seconds (0 in gc).
+    10
+    > a
+    ; Evaluation took 0 Seconds (0 in gc).
+    ()
+
+   最後に、セマフォーを用いた例として、平行プログラミングの例題としてはおな
+   じみの食事をする哲学者の問題を取り上げることにします。
+    使用するセマフォーは「ピジョンホールの原理」によるデッドロックの回避のた
+    めのroomと５本のフォークです。(お箸という設定の方が余程無理があると私は
+    思うので、、、)
+    
+    ところで、ここに登場する哲学者は、何故か考えていることは(tarai 6 3 0)が
+    いくつになるのかということです。それどころか食事中にも(tarai 8 4 0)がい
+    くつかになるのかを計算しているのです。(この設定に無理があると思われる方
+    もいらっしゃるかもしれませんが、哲学者が考えていることは良くわからないと
+    いう点で凡庸なる私にとっては同じようなものなです。:-)
+    
+    (define (dining-philosophers)
+      (define (ngensemaphore i n)
+        (if (= 0 n) nil (cons (gensemaphore i) (ngensemaphore i (-1+ n)))))
+      (let ((room (gensemaphore 4))
+        (fork (list->vector (ngensemaphore 1 5)))
+        (think (lambda (i)
+              (iostream
+                (display "Philosopher")
+                (display i)
+                (display " starts thinking.")
+                (newline))
+              (tarai 6 3 0)
+              (iostream
+                (display "Philosopher")
+                (display i)
+                (display " stops thinking.")
+                (newline))))
+        (eat (lambda (i)
+               (iostream
+                 (display "Philosopher")
+                 (display i)
+                 (display " starts eating.")
+                 (newline))
+               (tarai 8 4 0)
+               (iostream
+                 (display "Philosopher")
+                 (display i)
+                 (display " stops eating.")
+                 (newline)))))
+        (letrec ((philosopher (lambda (i)
+                    (think i)
+                    (wait room)
+                    (wait (vector-ref fork i))
+                    (wait (vector-ref fork (modulo (1+ i) 5)))
+                    (eat i)
+                    (signal (vector-ref fork i))
+                    (signal (vector-ref fork (modulo (1+ i) 5)))
+                    (signal room)
+                    (philosopher i))))
+          (global-define start-eating
+        (lambda ()
+          (wait room)
+          (iostream (display "You've gone into the room.")(newline))
+          (wait (vector-ref fork 0))
+          (iostream (display "You've taken your own fork.")(newline))
+          (wait (vector-ref fork 1))
+          (iostream (display "You've taken the fork on the right side.")(newline)
+                (display "You can eat.")(newline)) #t))
+          (global-define stop-eating
+        (lambda ()
+          (signal (vector-ref fork 0))
+          (iostream (display "You've released your own fork.")(newline))
+          (signal (vector-ref fork 1))
+          (iostream (display "You've released the fork on the right side.")
+    (newline))
+          (signal room)
+          (iostream (display "You've gone out of the room.")(newline)) #t))
+          (cobegin
+    ;       (philosopher 0)
+           (philosopher 1)
+           (philosopher 2)
+           (philosopher 3)
+           (philosopher 4)))))
+    
+    では、実行してみましょう。
+    
+    > (dining-philosophers)
+    ; Evaluation took 0 Seconds (0 in gc).
+    (#<Place Holder> #<Place Holder> #<Place Holder> #<Place Holder>)
+    > Philosopher1 starts thinking.
+    Philosopher2 starts thinking.
+    Philosopher3 starts thinking.
+    Philosopher4 starts thinking.
+    Philosopher1 stops thinking.
+    Philosopher1 starts eating.
+    Philosopher2 stops thinking.
+    Philosopher3 stops thinking.
+    Philosopher3 starts eating.
+    Philosopher4 stops thinking.
+    Philosopher1 stops eating.
+    Philosopher1 starts thinking.
+    Philosopher3 stops eating.
+    Philosopher3 starts thinking.
+    Philosopher2 starts eating.
+    Philosopher1 stops thinking.
+    Philosopher4 starts eating.
+    Philosopher3 stops thinking.
+    Philosopher2 stops eating.
+    Philosopher2 starts thinking.
+    Philosopher4 stops eating.
+    Philosopher4 starts thinking.
+    Philosopher1 starts eating.
+    Philosopher3 starts eating.
+    Philosopher2 stops thinking.
+    Philosopher4 stops thinking.
+    Philosopher1 stops eating.
+    Philosopher1 starts thinking.
+    Philosopher3 stops eating.
+    Philosopher3 starts thinking.
+    Philosopher2 starts eating.
+    Philosopher4 starts eating.
+    Philosopher1 stops thinking.
+    Philosopher3 stops thinking.
+    
+    さて、哲学者の一人は何故かあなたです。食事をしてみてください。
+    (start-eating)
+    
+    Philosopher2 stops eating.
+    Philosopher2 starts thinking.
+    You've gone into the room.
+    Philosopher4 stops eating.
+    Philosopher4 starts thinking.
+    You've taken your own fork.
+    Philosopher1 starts eating.
+    Philosopher3 starts eating.
+    Philosopher2 stops thinking.
+    Philosopher4 stops thinking.
+    Philosopher1 stops eating.
+    Philosopher1 starts thinking.
+    You've taken the fork on the right side.
+    You can eat.
+    ; Evaluation took 8.03333 Seconds (2.61667 in gc).
+    #t
+    > 
+    これで無事にあなたは食事ができました。ロックアウトによって餓死している哲
+    学者がいないことを確認しておいてください。
+    
+    Philosopher3 stops eating.
+    Philosopher3 starts thinking.
+    Philosopher2 starts eating.
+    Philosopher1 stops thinking.
+    Philosopher3 stops thinking.
+    Philosopher2 stops eating.
+    Philosopher2 starts thinking.
+    Philosopher2 stops thinking.
+    (report)
+    ======================
+     terminate cpu:0
+     active    cpu:0
+     wait      cpu:0
+     sem wait  cpu:4
+     error     cpu:0
+    ======================
+    ; Evaluation took 0.0166667 Seconds (0 in gc).
+    
+    おやおや、食べ終わったらさっさと部屋を出ましょう。
+    
+    > (stop-eating)
+    You've released your own fork.
+    You've released the fork on the right side.
+    You've gone out of the room.
+    ; Evaluation took 0 Seconds (0 in gc).
+    #t
+    > Philosopher4 starts eating.
+    Philosopher4 stops eating.
+    Philosopher4 starts thinking.
+    Philosopher3 starts eating.
+    ^C
+    
+    さて、別にあなたはtaraiの計算をする必要はありません。もっと有意義なこと
+    に頭を使いましょう。
+    
+    > (quit)
+    ;EXIT
+    
+    Process scheme finished
+
+------------------------------------------------------------------------------
+
+  おわりに
+
+   以上です。もちろんこれで十分であるとは全然考えていません。
+   今後も拡張して行きます。

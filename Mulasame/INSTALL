@@ -1,0 +1,160 @@
+
+                         インストール方法について
+
+
+                                                     平成6年9月26日
+
+    Copyright (C) 1990, 1991, 1992, 1993, 1994  Shoichi Hayashi (林 祥一)
+
+   以下の説明は、ディレクトリScheme配下の構成が、配布時の圧縮を展開した状態
+   のままで変更されていないことを前提としています。
+
+   UNIXの場合は、はじめに動作環境のところで述べたinput-testを実行してみてく
+   ださい。input-test.cはMulasame配下にあります。
+
+1. 環境変数を設定します。
+
+    MULASAME_BOOT_PATH
+    boot.bin, Init.scm, parallel.bin, secdrscm.init 等が置かれているディレク
+    トリのパスを指定して下さい。
+    
+    SECDR_LIBRARY_PATH
+    SECDR-Scheme附属のライブラリ等のコンパイル済みファイルを置くディレクトリ
+    のパスを指定して下さい。
+    
+    SCHEME_LIBRARY_PATH
+    jafferのslib(slib2a0を想定しています)を置くディレクトリのパスを指定して
+    下さい。
+    
+    unixの場合の例）
+    
+    setenv MULASAME_BOOT_PATH /usr/lang/Scheme/Mulasame/
+    setenv SCHEME_LIBRARY_PATH /usr/lang/Scheme/slib/
+    setenv SECDR_LIBRARY_PATH /usr/lang/Scheme/secdrlib/bin/
+    
+    Macの場合）
+    システムフォルダー内のPreferencesフォルダーの直下にmockEnvというテキスト
+    ファイルを作成し、以下のように記述します。
+    
+    MULASAME_BOOT_PATH = "HD:lang:Scheme:Mulasame:"
+    SECDR_BOOT_PATH = "HD:lang:Scheme:SECDR:"
+    SCHEME_LIBRARY_PATH = "HD:lang:Scheme:slib:"
+    SECDR_LIBRARY_PATH = "HD:lang:Scheme:secdrlib:bin:"
+    
+    このようにここに
+    
+    ENV_NAME = "VAL"
+    
+    と記述することによって環境変数一般の代わりをさせることができます。
+
+2. コンパイル
+
+    ソースはScheme/Mulasame/の配下にあります。ここをカレントディレクトリにし
+    て下さい。そして、ここでmakeを実行して下さい。これで実行形式mulasameが出
+    来上がるはずです。
+
+3. 動作確認
+
+    test.scmを実行してみてください。
+
+     test.scmは、R4RSの仕様を満たしていることのテストプログラムです。必ずSch
+     eme/test/をカレントディレクトリにして実行して下さい。
+     mulasameを実行し、カレントディレクトリをtestに移して下さい。
+     
+     > (cd "../test")
+     
+     そして
+     
+     > (load "test")
+     
+     を実行して下さい。
+
+      Macの場合の注意）
+
+       pwd, cd は ThinkCで作成した Mac版(ASL-Tool版を含む)でも使えます。また、
+       ライブラリのコンパイルが完了するまでは、実行開始時にファイルが見つか
+       らないので、ダイアログボックスが現れる場合がありますが、この場合はキャ
+       ンセルを選んでください。
+
+    paratest.scmを実行してみてください。
+
+     これは、MANUALに書かれている実行例を自動的に実行するものです。
+     ただし、適当に待ち時間を作るためにMaster CPUが空回りしているので、これ
+     の実行中はユーザはMasterのCPUも他のことには使えません。
+     また、tarai関数はよくベンチマークに用いられるものです。(tarai 8 4 0)ぐ
+     らいでも、これを計算するタスクが複数走り、さらに待ち時間のための空ルー
+     プが動くことになりますので、かなり重い処理になります。SS2 では、この程
+     度が良かったのですが、Macでは数値を小さめにして実行した方がよいでしょう。
+     
+     
+     また、Macではタスクスイッチのタイミングを決めるスケジューラの定数が異な
+     りますので、当然MANUALに記載された結果と全く同じ結果が得られるとは限り
+     ません。
+     (食事をする哲学者の順序が異なったりします。)
+
+    他にも、lindatest.scm, grtest.scm, colorbar.scm を実行してみて下さい。
+
+     lindatest.scmに関してはMulasame/Doc/MIZUTAMARI.doc を参照して下さい。
+     colorbar.scm は、loadしてから(colorbar)を実行すると、タートルグラフィッ
+     クスで利用できる色と、対応する番号がわかります。
+     grtest.scm は、loadしてから(grtest)を実行すると、デモが動きます。ただし、
+     これを動かすためにはslibがインストールされていることが必要です。
+
+4. ライブラリのコンパイル
+
+    secdrlib配下のライブラリをコンパイルし直す場合は、次のようにします。
+    mulasameの存在するディレクトリにカレントディレクトリを戻して下さい。そし
+    て
+    
+    > (load "mklib")
+    
+    を実行して下さい。
+
+5. その他
+
+    slibを使う方はmkslibをロードして前もってコンパイルしておいた方が良いでしょ
+    う。
+    (注: secdrlibのmoduleを読み込んだ後ではマクロ名fromが重複してエラーになっ
+    てしまいますますので、こちらを先にコンパイルして下さい。)
+
+    jaffer の slib の インストール (slibを利用する場合)
+     require.scm の以下の３行を修正して下さい。
+     
+          (fluid-let		macro	.	"fluidlet")
+          (yasos		macro	.	"yasos")
+          (collect		macro	.	"collect")
+     
+     macroは必要無いので、以下のようにします。
+     
+          (fluid-let			.	"fluidlet")
+          (yasos			.	"yasos")
+          (collect			.	"collect")
+     
+     ( 注：これはMulasameがR4RSの全てのマクロの仕様を満たしているということ
+     ではないのですが、slibでのマクロの使われ方に関しては対応できるので、こ
+     のことに対する措置です。)
+     
+     Scheme/Mulasame/をカレントディレクトリとして、mulasameを立ち上げ、
+     
+     	(load "mkslib")
+     
+     を実行し、コンパイルして下さい。
+
+    jafferのjacal(README参照)を使う場合は添付したパッチを当てて、これもコン
+    パイルしておいた方が良いでしょう。
+    パッチの内容はマクロ名と重複している変数名を変更してあるだけです。
+    このように、SECDR-Schemeではr4rsに対して拡張されたいくつかのマクロが存在
+    します。またユーザ自身がマクロを定義することもできます。このとき気をつけ
+    なければならないことは、一度マクロ名として定義したものは変数名としては使
+    えないということです。名前が重複してしまった場合は、どちらかの名前を付け
+    替えて下さい。
+
+    boot.bin はブートストラップで必要ですから付けてありますが、これを作成し
+    直したい時は(load "mkboot")を実行して下さい。
+
+    MacintoshのThinkCで作成したものは、バックグラウンドでも動きますが、画面
+    の再描画に関してのみまだ問題を残しています。ASL-Edit+のTool版 SECDR-Sche
+    meを利用する場合は、ASL-Edit+はバージョン1.0/a37以降のものを使用して下さ
+    い。また、十分なメモリ領域(5M程度以上)を割り当てて下さい。
+
+    Macでは、ASLFont+を使用しますので、これをインストールしておいて下さい。

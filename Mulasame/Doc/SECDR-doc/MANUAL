@@ -1,0 +1,493 @@
+
+                            SECDR-Schemeについて
+
+                                                      平成5年6月20日
+
+          Copyright (C) 1990, 1991, 1992, 1993  Shoichi Hayashi (林 祥一)
+
+ここではR4RS[2]に対して拡張されているものだけを説明します。またこの処理系は、
+#v (void) を持っています。そして特に断らない限り、以下に示すprocedureは#vを
+返します。
+
+------------------------------------------------------------------------------
+
+()                                                                special form
+        () は値 () を持つ
+nil                                                                   variable
+        nil は値 () を持つ
+t                                                                     variable
+        t は値 #t を持つ
+
+[ロードとコンパイル]
+(load <filename>)                                                    procedure
+(load <filename> <noisily-flg>)                                      procedure
+(load <filename> <noisily-flg> <error-flg>)                          procedure
+        <filename>はSchemeプログラムのソースファイル名のstringであるべきで
+        ある。
+        <noisily-flg>, <error-flg>は指定されなければ#fが指定された場合と
+        同様に振舞う。
+        <noisily-flg>が#fか()であれば、ロード中の評価結果は何も表示されない。
+        #fか()でないならば、ロードされた式の結果を標準出力に表示する。
+        <error-flg>が#fか()であれば、ロードが成功した場合に返す値は#vである。
+        もしも指定されたファイルが見つからない場合はエラーとなる。
+        #fか()でないならば、正常にロードが行われた場合には#tを返す。もしも
+        指定されたファイルが見つからない場合には#fを返し、エラーとはならない。
+
+(bin-load <filename>)                                                procedure
+(bin-load <filename> <noisily-flg>)                                  procedure
+(bin-load <filename> <noisily-flg> <error-flg>)                      procedure
+        <filename>はSchemeプログラムのコンパイルされたファイル名のstringで
+        あるべきである。
+        <noisily-flg>, <error-flg>は指定されなければ#fが指定された場合と
+        同様に振舞う。
+        <noisily-flg>が#fか()であれば、ロード中の評価結果は何も表示されない。
+        #fか()でないならば、ロードされた式の結果を標準出力に表示する。
+        <error-flg>が#fか()であれば、ロードが成功した場合に返す値は#vである。
+        もしも指定されたファイルが見つからない場合はエラーとなる。
+        #fか()でないならば、正常にロードが行われた場合には#tを返す。もしも
+        指定されたファイルが見つからない場合には#fを返し、エラーとはならない。
+
+(ex-load <filename>)                                                 procedure
+(ex-load <filename> <noisily-flg>)                                   procedure
+(ex-load <filename> <noisily-flg> <error-flg>)                       procedure
+        <filename>はSchemeプログラムのソースまたはコンパイルされたファイル名の
+        stringであるべきである。
+        <noisily-flg>, <error-flg>は指定されなければ#fが指定された場合と
+        同様に振舞う。
+        <noisily-flg>が#fか()であれば、ロード中の評価結果は何も表示されない。
+        #fか()でないならば、ロードされた式の結果を標準出力に表示する。
+        <error-flg>が#fか()であれば、ロードが成功した場合に返す値は#vである。
+        もしも指定されたファイルが見つからない場合はエラーとなる。
+        #fか()でないならば、正常にロードが行われた場合には#tを返す。もしも
+        指定されたファイルが見つからない場合には#fを返し、エラーとはならない。
+        <filename>のstringの最後が ".scm" であればソースであると解釈し、".bin"
+        であればコンパイルされたものであると解釈する。それ以外の場合はソースで
+        あるものと判断し、ロードを行うが、もしもそのファイルが見つからなかった
+        場合には、拡張子が省略されたものと判断し、<filename>のstringの最後に 
+        ".bin" あるいは ".scm"を補ったファイルをロードする。
+        両方存在する場合は、常に ".bin" が優先して選択される。
+        従って ".bin" 拡張子を持たないコンパイル済みのファイルをロードする
+        場合は、必ずbin-loadを用いなければならない。
+
+-*-compile-*-                                                         variable
+        トップレベルのREAD-EVAL-PRINT(実際にはREAD-COMPILE-EXEC-PRINT)ループな
+        どで使われる標準のコンパイラ手続きを設定する。初期状態では以下のcompile
+        が設定されている。
+
+(compile <expr>)                                                     procedure
+(compile <expr> <mode>)                                              procedure
+        <expr>をコンパイルしたコードを返す。<mode>に()以外が指定された場合には
+        マクロの展開だけを行った結果を返す。
+
+(macro-expand <expr>)                                                procedure
+        <expr>のマクロを展開した結果を返す。(compile <expr> #t)に同じである。
+
+(disassemble <code>)                                                 procedure
+        <code>をディスアセンブルした結果を表示する。
+        したがって<code>はコンパイルされたSECDRマシンのコードであるべきである。
+
+(compile-file <sourcefile1> ... <outfile>)                           procedure
+        <sourcefile1> ... は、全て既に存在するSchemeプログラムのソースファイ
+        ル名のstringであるべきである。これらのファイルをコンパイルした結果を
+        <outfile>にstringで指定されたファイルに出力する。
+
+(%current-dump%)                                                     procedure
+        呼び出された時点でのDレジスタ(DUMP)の値を返す。
+        （通常、ユーザはこのprocedureを呼び出すべきではない。）
+
+[エバリュータ]
+
+-*-eval-hook-*-                                                       variable
+-*-exec-hook-*-                                                       variable
+        各々トップレベルのREAD-EVAL-PRINTループなどで使われる標準の評価,実行
+        手続きを設定する。初期状態では以下のeval, execが設定されている。
+        例えばマクロの展開機能を拡張したmacro:evalを自分で定義した場合などは、
+        それを設定することによって、トップレベルにおいてもmacro:evalの方を
+        用いることができる。
+
+(eval <expr>)                                                        procedure
+        <expr>をトップレベルの環境下で評価し、その値を返す。
+        (exec (compile <expr>))に等価である。
+
+(exec <compiled-expr>)                                               procedure
+        <compiled-expr>をトップレベルの環境下で実行し、その値を返す。
+
+[エラー]
+-*-error-hook-*-                                                      variable
+        エラーやインタラプトが発生した時にこの値の手続きが起動される。
+
+(error <msg> <irritant1> ...)                                        procedure
+
+        <msg>はstringであるべきである。エラーであることと、<msg>,<irritant>を
+        表示し、-*-error-hook-*-に設定されている手続きを起動する。
+
+注)この処理系では仮想的なマシンが２台(Master, Slave)用意されている。
+   通常動いているMasterのマシンはこの呼び出し時点で停止し、上述の処理はSlaveが
+   代わって行う。
+
+[マシン操作]
+(%master->list%)                                                     procedure
+        MasterのSECDRマシンの５つのレジスタの内容をリストにして返す。
+
+(%list->master% <list>)                                              procedure
+        <list>の内容をMasterのSECDRマシンの各レジスタに設定する。
+        従って<list>は長さ５のリストであるべきである。
+
+(%reset-master%)                                                     procedure
+        Slaveのマシンがこれを評価すると、Masterのマシンの全てのレジスタを
+        クリアする。すなわち (%list->master% '(()()()()())) と同等の結果を
+        もたらす。ただし、Masterのマシンがこれを評価した場合は何も行うこと
+        なくこれを無視する。
+
+[マクロ]
+(macro <keyword> <transformer>)                             macro special form
+        マクロスペシャルフォームのキーワードとして<keyword>を定義する。
+        <transformer>は、マクロスペシャルフォーム全体を受け取って、それを
+        展開し、置き換えるべき式を返す一引数の手続きであるべきである。
+
+
+extend-syntax                                               macro special form
+        extend.exampleファイルを参照のこと。
+
+        <参考>
+         jafferのslibに含まれるマクロを用いたもの(fluidlet.scm, yasos.scm, 
+         collect.scm)では、マクロは決まった使われ方しかされていないので、
+         このextend-syntaxを用いて、次の要領で書き換えればSECDR-Schemeのマ
+         クロで実行できる。その決まった使われ方とは、
+
+             (define-syntax INSTANCE-DISPATCHER
+               (syntax-rules () ((instance-dispatcher inst) (cdr inst))))
+
+         といったように、
+
+             (define-syntax <NAME>
+               (syntax-rules () <BODY>))
+
+         の形態をしているので、これを
+
+             (extend-syntax (<NAME>)
+               <BODY>)
+
+         のように書き換える。
+
+         例えば上の例は
+
+             (extend-syntax (INSTANCE-DISPATCHER)
+               ((instance-dispatcher inst) (cdr inst)))
+
+         とすれば良い。
+
+syntax-match?                                                        procedure
+        extend-syntaxが用いるprocedureである。
+
+[大域変数定義]
+global-define                                                     special form
+        defineと同様であるが、常にトップレベルで評価されたと同じ効果を持つ。
+
+[ガーベジコレクション]
+(gc)                                                                 procedure
+        強制的にガーベジコレクションを実行させる。
+(gc-verbose-off)                                                     procedure
+(gc-verbose-on)                                                      procedure
+        ガーベジコレクションの実行を標準出力に表示するか否かの指定をする。
+
+[新しいシンボル作成]
+(gensym)                                                             procedure
+(make-temp-symbol)                                                   procedure
+(gensym <string>)                                                    procedure
+(make-temp-symbol <string>)                                          procedure
+        新しいシンボルを生成し、それを返す。
+        <string>の指定の有る無しによって次のようになる。
+                (gensym)        -->     G123
+                (gensym "temp") -->     temp123
+
+[属性リスト]
+(get <symbol> <attribute>)                                           procedure
+(put <symbol> <attribute> <value>)                                   procedure
+        <symbol>の属性リストに対する操作を行なう。
+        putは#vを返し、getは指定された属性値を返す。
+
+[システム関係]
+(quit)                                                               procedure
+        SECDR-Schemeの実行を終了する。
+
+(new-segment <n>)                                                    procedure
+        ヒープ領域を広げる。<n>は広げたいセグメントの数で、正の整数である
+        べきである。（１セグメントの大きさはシステムによる。）
+        実際に拡張できたセグメント数をメッセージ出力する。
+        #vを返す。
+
+(system <string>)                                                    procedure
+        <string>の内容をホスト環境に渡し、コマンドプロセッサに実行させる。
+        その結果の値を返す。
+
+(pwd)                                                                procedure
+        カレントディレクトリのフルパス名をstringとして返す。
+
+(cd)                                                                 procedure
+(cd <pathname>)                                                      procedure
+        <pathname>を省略すると、カレントディレクトリをホームディレクトリに
+        設定する。
+        <pathname>はstringであるべきである。
+        指定されたパスへカレントディレクトリを変更する。
+        成功すると#t、失敗ならば#fを返す。
+
+(chdir <pathname>)                                                   procedure
+        <pathname>はstringであるべきである。
+        指定されたパスへカレントディレクトリを変更する。
+        成功すると#t、失敗ならば#fを返す。
+
+(getenv <name>)                                                      procedure
+        <name>はstringであるべきである。
+        名前が<name>に等しいシステムの環境変数の値をstringとして返す。
+        もしもそのような環境変数が定義されていない場合は#fを返す。
+
+(software-type)                                                      procedure
+        実行している環境がunix上であればunix, Macintosh上であればmacos, 
+        MS-DOS上であればmsdosを返す。
+
+(ls)                                                                 procedure
+(ls <string>)                                                        procedure
+        shellに ls <string> を実行させる。
+
+(rm <filename>)                                                      procedure
+        shellに rm <filename> を実行させる。
+
+(ed)                                                                 procedure
+(ed <filename>)                                                      procedure
+        エディタを起動する。
+
+my-ls                                                                 variable
+my-rm                                                                 variable
+my-editor                                                             variable
+        ls, rm, ed で実行したいシステムのコマンド名（＋オプション）を
+        文字列としてこれらの変数に定義する。再定義可能。
+
+[TIME]
+(get-internal-time-units)                                            procedure
+        CLOCK_PER_SECの値をintegerとして返す。
+
+(get-internal-run-time)                                              procedure
+        実行時間のCLOCK単位の値をintegerとして返す。
+
+[トレース]
+(trace <sym1> <sym2> ...)                                            procedure
+(untrace <sym1> <sym2> ...)                                          procedure
+        <sym1>, <sym2>, ... に対しトレースの設定、あるいは解除を行なう。
+
+set-trace                                                            procedure
+        traceが用いるprocedureである。
+
+[制御]
+(sequence <expr>)                                           macro special form
+        以下のように定義されている。
+                (macro sequence (lambda (expr)
+                  `((lambda () ,@(cdr expr))) ))
+        注意するべきことは、beginとは異なり、<expr>内のdefine文を特別扱い
+        しないということである。
+
+while                                                       macro special form
+when                                                        macro special form
+unless                                                      macro special form
+        各々以下のように定義されている。
+                (macro while (lambda (while-macro)
+                  (apply 
+                    (lambda (pred . body)
+                      (let ((while-loop (gensym))
+                            (while-res (gensym)))
+                        `(letrec ((,while-loop
+                                   (lambda (,while-res)
+                                     (if ,pred (,while-loop (begin ,@body))
+                                         ,while-res))))
+                           (,while-loop #f))))
+                    (cdr while-macro))))
+
+                (macro when
+                  (lambda (args)
+                    `(if ,(cadr args)
+                         (begin ,@(cddr args))
+                         #f)))
+
+                (macro unless
+                  (lambda (args)
+                    `(if ,(cadr args)
+                         #t
+                         (begin ,@(cddr args)))))
+
+(rec <var> <expr>)                                          macro special form
+        (letrec ((<var> <expr>)) <var>)に等価である。recは以下の例に示す
+        ように、self-recursive procedureの定義に便利である。
+
+                ((rec loop
+                   (lambda (n l)
+                     (if (zero? n)
+                         l
+                         (loop (- n 1)(cons n l)))))
+                 6 '())          --> (1 2 3 4 5 6)
+
+        以下のように定義されている。
+                (macro rec (lambda (rec-macro)
+                  (apply (lambda (proc body)
+                    `(letrec ((,proc ,body)) ,proc))
+                  (cdr rec-macro))))
+
+andmap                                                               procedure
+        以下のように定義されている。
+                (define (andmap p . args)
+                  ;; use "first-finish" rule
+                  (let andmap ((args args) (value #t))
+                    (if (let any-at-end? ((ls args))
+                          (and (pair? ls)
+                               (or (not (pair? (car ls)))
+                                   (any-at-end? (cdr ls)))))
+                        value
+                        (let ((value (apply p (map car args))))
+                          (and value (andmap (map cdr args) value))))))
+
+[述語]
+(file-exists? <file-name>)                                           procedure
+        <file-name>はstringであるべきである。<file-name>に指定された名前に
+        一致するファイルが既に存在している場合は#tを、そうでなければ#fを返す。
+
+some?                                                                procedure
+every?                                                               procedure
+        各々以下のように定義されている。
+                (define (some? proc plist)
+                  (cond
+                    ((null? plist) #f)
+                    ((proc (car plist)) #t)
+                    (else (some? proc (cdr plist)))))
+
+                (define (every? proc plist)
+                  (cond
+                    ((null? plist) #t)
+                    ((proc (car plist)) (every? proc (cdr plist)))
+                    (else #f)))
+
+(atom? <obj>)                                                        procedure
+(closure? <obj>)                                                     procedure
+(continuation? <obj>)                                                procedure
+(primitive-procedure? <obj>)                                         procedure
+(proper-rational? <obj>)                                             procedure
+(proper-real? <obj>)                                                 procedure
+(promise? <obj>)                                                     procedure
+        <obj>が各々のtypeであるとき#t、そうでなければ#fを返す。
+
+(set-promise <obj>)                                                  procedure
+        (promise? <obj>)が#tを返すようにする。delayで用いている。
+
+[型変換]
+char->string                                                         procedure
+        以下のように定義されている。
+                (define (char->string c)
+                  (string-set! "@" 0 c))
+
+
+[ボックス型]
+(box)                                                                procedure
+(box <object>)                                                       procedure
+        <object>を持つboxを返す。
+        ボックス型の差したてマクロ文字が標準で用意されている。それは#&で、
+        (box <object>)は#&(<object>)と記述しても良い。
+
+(unbox <box-object>)                                                 procedure
+        <box-object>はboxでなければならない。<box-object>の中のobjectを
+        取り出し、それを返す。
+
+(box? <object>)                                                      procedure
+        <object>がboxであるときは#t、そうでないときは#fを返す。
+
+(set-box! <box-object> <object>)                                     procedure
+        <box-object>はboxでなければならない。<box-object>の中を<object>で
+        置き換える。
+
+[ストリーム]
+cons-stream                                                 macro special form
+head                                                                 procedure
+tail                                                                 procedure
+        各々以下のように定義されている。
+                (macro cons-stream (lambda (l)
+                    `(cons ,(cadr l) (delay ,(caddr l)))))
+
+                (define (head stream) (car stream))
+
+                (define (tail stream) (force (cdr stream)))
+
+[入出力]
+(spaces <num> <outport>)                                             procedure
+        <num>で指定された数のスペースを<outport>に出力する。
+
+(print-list <mode> <list> <outport>)                                 procedure
+        <list>を<outport>に出力する。<mode>に0が指定されると、
+        <list>の各要素はdisplayで出力されたようになり、
+        その他の値が指定されると、各要素はwriteで出力されたようになる。
+
+pretty-print                                                         procedure
+        簡易版pretty-print
+
+prompt-read                                                          procedure
+        以下のように定義されている。
+        (define (prompt-read prompt) (display prompt) (read))
+
+printf                                                               procedure
+        C言語のprintfに似たもの
+
+%format%                                                             procedure
+        簡易版format
+
+(uniq-print <term>)                                                  procedure
+        <term>に循環listまたはvectorが含まれる場合は、それにラベルをつけて
+        pretty-print形式で表示する。
+
+(uniq-write <term>)                                                  procedure
+        <term>に循環listまたはvectorが含まれる場合は、それにラベルをつけて
+        表示する。
+
+(uniq-read)                                                          procedure
+        循環listまたはvectorのラベルによる表現形式を正しく読みとる。
+
+(u-conv <term>)                                                      procedure
+        <term>に循環listまたはvectorが含まれる場合は、<term>をラベルによる
+        表現に破壊的に変換し、その値を返す。
+        (注: 元の値に戻すためにはこの返す値を必ずとっておく必要がある。
+             すなわち返す値と<term>は異なる。)
+
+(uu-conv <term>)                                                     procedure
+        循環listまたはvectorのラベルによる表現形式を含む<term>を元の状態に
+        破壊的に戻し、その値を返す。
+        (注: <term>自身を元の値に戻すためには、この返す値を必ず設定し直す
+             必要がある。)
+
+注) 蛇足ながら(uu-conv (u-conv <term>))はもちろん正しく<term>を元に戻す。
+
+[R^2RS]
+-1+                                                                  procedure
+1+                                                                   procedure
+
+[その他]
+simplest-rational                                                    procedure
+        rationalizeが用いるprocedureである。
+
+(list-width <obj>)                                                   procedure
+        <obj>の印字形式が何文字(byte)になるかを返す。
+
+(qsort <seq> <pre>)                                                  procedure
+        <pre>は比較のための述語、<seq>はlistまたはvectorであるべきである。
+        クイックソートによって並べ換えた値を返す。
+
+(qsort! <seq> <pre>)                                                 procedure
+        <pre>は比較のための述語、<seq>はvectorであるべきである。
+        クイックソートによって<seq>で与えられたvectorの要素を並べ換える。
+        そしてその値を返す。(副作用を期待する場合に用いる。)
+
+------------------------------------------------------------------------------
+
+<参考文献>
+
+[1] Harold Abelson, Gerald Jay Sussman:
+    Structure and Interpretation of Computer Programs,
+    McGrawHill, 1985.
+
+[2] William Clinger, Jonathan Rees.(Editors):
+    Revised^4 Report on the Algorithmic Language Scheme,
+    2 November, 1991.

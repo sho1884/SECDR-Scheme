@@ -1,0 +1,786 @@
+\section{マニュアル}
+\par
+ここではR4RS\cite{bib:Revised}に対して拡張されているものだけを説明します。
+またこの処理系は、\verb+#v+ (void) を持っています。そして特に断らない限り、
+以下に示すprocedureは\verb+#v+を返します。
+\medskip
+\par
+---------------------------------------------------------------\\
+\medskip
+\verb+()+\hspace*{\fill} special form
+\begin{nquote}{4ex}
+\verb+()+は値\verb+()+を持つ\\
+\end{nquote}
+\verb+nil+\hspace*{\fill} variable
+\begin{nquote}{4ex}
+\verb+nil+は値\verb+()+を持つ\\
+\end{nquote}
+\verb+t+\hspace*{\fill} variable
+\begin{nquote}{4ex}
+\verb+t+は値\verb+#t+を持つ\\
+\end{nquote}
+
+\begin{description}
+\item[{[}ロードとコンパイル{]}]~
+\end{description}
+\verb+(load+ $\langle$filename$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(load+ $\langle$filename$\rangle$ $\langle$noisily-flg$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(load+ $\langle$filename$\rangle$ $\langle$noisily-flg$\rangle$ $\langle$error-flg$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$filename$\rangle$はSchemeプログラムのソースファイル名のstringであるべきで
+ある。\\
+$\langle$noisily-flg$\rangle$, $\langle$error-flg$\rangle$は指定されなければ\verb+#f+が指定された場合と
+同様に振舞う。\\
+$\langle$noisily-flg$\rangle$が\verb+#f+か\verb+()+であれば、ロード中の評価結果は何も表示されない。
+\verb+#f+か\verb+()+でないならば、ロードされた式の結果を標準出力に表示する。\\
+$\langle$error-flg$\rangle$が\verb+#f+か\verb+()+であれば、ロードが成功した場合に返す値は\verb+#v+である。
+もしも指定されたファイルが見つからない場合はエラーとなる。\\
+\verb+#f+か\verb+()+でないならば、正常にロードが行われた場合には\verb+#t+を返す。もしも
+指定されたファイルが見つからない場合には\verb+#f+を返し、エラーとはならない。
+\end{nquote}
+\medskip
+\verb+(bin-load+ $\langle$filename$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(bin-load+ $\langle$filename$\rangle$ $\langle$noisily-flg$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(bin-load+ $\langle$filename$\rangle$ $\langle$noisily-flg$\rangle\langle$error-flg$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$filename$\rangle$はSchemeプログラムのコンパイルされたファイル名のstringで
+あるべきである。\\
+$\langle$noisily-flg$\rangle$, $\langle$error-flg$\rangle$は指定されなければ\verb+#f+が指定された場合と
+同様に振舞う。\\
+$\langle$noisily-flg$\rangle$が\verb+#f+か\verb+()+であれば、ロード中の評価結果は何も表示されない。
+\verb+#f+か\verb+()+でないならば、ロードされた式の結果を標準出力に表示する。\\
+$\langle$error-flg$\rangle$が\verb+#f+か\verb+()+であれば、ロードが成功した場合に返す値は\verb+#v+である。
+もしも指定されたファイルが見つからない場合はエラーとなる。\\
+\verb+#f+か\verb+()+でないならば、正常にロードが行われた場合には\verb+#t+を返す。もしも
+指定されたファイルが見つからない場合には\verb+#f+を返し、エラーとはならない。
+\end{nquote}
+\medskip
+\verb+(ex-load+ $\langle$filename$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(ex-load+ $\langle$filename$\rangle$ $\langle$noisily-flg$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(ex-load+ $\langle$filename$\rangle$ $\langle$noisily-flg$\rangle$ $\langle$error-flg$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$filename$\rangle$はSchemeプログラムのソースまたはコンパイルされたファイル名の
+stringであるべきである。\\
+$\langle$noisily-flg$\rangle$, $\langle$error-flg$\rangle$は指定されなければ\verb+#f+が指定された場合と
+同様に振舞う。\\
+$\langle$noisily-flg$\rangle$が\verb+#f+か\verb+()+であれば、ロード中の評価結果は何も表示されない。
+\verb+#f+か\verb+()+でないならば、ロードされた式の結果を標準出力に表示する。\\
+$\langle$error-flg$\rangle$が\verb+#f+か\verb+()+であれば、ロードが成功した場合に返す値は\verb+#v+である。
+もしも指定されたファイルが見つからない場合はエラーとなる。
+\verb+#f+か\verb+()+でないならば、正常にロードが行われた場合には\verb+#t+を返す。もしも
+指定されたファイルが見つからない場合には\verb+#f+を返し、エラーとはならない。\\
+$\langle$filename$\rangle$のstringの最後が ".scm" であればソースであると解釈し、".bin"
+であればコンパイルされたものであると解釈する。それ以外の場合はソースで
+あるものと判断し、ロードを行うが、もしもそのファイルが見つからなかった
+場合には、拡張子が省略されたものと判断し、$\langle$filename$\rangle$のstringの最後に 
+".bin" あるいは ".scm"を補ったファイルをロードする。\\
+両方存在する場合は、常に ".bin" が優先して選択される。
+従って ".bin" 拡張子を持たないコンパイル済みのファイルをロードする
+場合は、必ずbin-loadを用いなければならない。
+\end{nquote}
+\medskip
+\verb+-*-compile-*-+\hspace*{\fill} variable
+\begin{nquote}{4ex}
+\par
+トップレベルのREAD-EVAL-PRINT(実際にはREAD-COMPILE-EXEC-PRINT)ループな
+どで使われる標準のコンパイラ手続きを設定する。初期状態では以下の\verb+compile+
+が設定されている。
+\end{nquote}
+\medskip
+\verb+(compile+ $\langle$expr$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(compile+ $\langle$expr$\rangle$ $\langle$mode$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$expr$\rangle$をコンパイルしたコードを返す。$\langle$mode$\rangle$に\verb+()+以外が指定された場合には
+マクロの展開だけを行った結果を返す。
+\end{nquote}
+\medskip
+\verb+(macro-expand+ $\langle$expr$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$expr$\rangle$のマクロを展開した結果を返す。\\
+\verb+(compile+ $\langle$expr$\rangle$ \verb+#t)+に同じである。
+\end{nquote}
+\medskip
+\verb+(disassemble+ $\langle$code$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$code$\rangle$をディスアセンブルした結果を表示する。
+したがって$\langle$code$\rangle$はコンパイルされたSECDRマシンのコードであるべきである。
+\end{nquote}
+\medskip
+\verb+(compile-file+ $\langle$sourcefile1$\rangle$ ... $\langle$outfile$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$sourcefile1$\rangle$ ... は、全て既に存在するSchemeプログラムのソースファイ
+ル名のstringであるべきである。これらのファイルをコンパイルした結果を
+$\langle$outfile$\rangle$にstringで指定されたファイルに出力する。
+\end{nquote}
+\medskip
+\verb+(%current-dump%)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+呼び出された時点でのDレジスタ(DUMP)の値を返す。\\
+(通常、ユーザはこのprocedureを呼び出すべきではない。)
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}エバリュータ{]}]~
+\medskip
+\end{description}
+\verb+-*-eval-hook-*-+\hspace*{\fill} variable\\
+\verb+-*-exec-hook-*-+\hspace*{\fill} variable
+\begin{nquote}{4ex}
+\par
+各々トップレベルのREAD-EVAL-PRINTループなどで使われる標準の評価,実行
+手続きを設定する。初期状態では以下の\verb+eval+, \verb+exec+が設定されている。
+例えばマクロの展開機能を拡張した\verb+macro:eval+を自分で定義した場合などは、
+それを設定することによって、トップレベルにおいても\verb+macro:eval+の方を
+用いることができる。
+\end{nquote}
+\medskip
+\verb+(eval+ $\langle$expr$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$expr$\rangle$をトップレベルの環境下で評価し、その値を返す。
+\verb+(exec (compile+ $\langle$expr$\rangle$\verb+))+に等価である。
+\end{nquote}
+\medskip
+\verb+(exec+ $\langle$compiled-expr$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$compiled-expr$\rangle$をトップレベルの環境下で実行し、その値を返す。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}エラー{]}]~
+\end{description}
+\verb+-*-error-hook-*-+\hspace*{\fill} variable
+\begin{nquote}{4ex}
+\par
+エラーやインタラプトが発生した時にこの値の手続きが起動される。
+\end{nquote}
+\medskip
+\verb+(error+ $\langle$msg$\rangle$ $\langle$irritant1$\rangle$ ...\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$msg$\rangle$はstringであるべきである。エラーであることと、$\langle$msg$\rangle$,$\langle$irritant$\rangle$を
+表示し、\verb+-*-error-hook-*-+に設定されている手続きを起動する\footnote{
+この処理系では仮想的なマシンが２台(Master, Slave)用意されている。
+通常動いているMasterのマシンはこの呼び出し時点で停止し、上述の処理はSlaveが
+代わって行う。}。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}マシン操作{]}]~
+\end{description}
+\verb+(%master->list%)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+MasterのSECDRマシンの５つのレジスタの内容をリストにして返す。
+\end{nquote}
+\medskip
+\verb+(%list->master%+ $\langle$list$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$list$\rangle$の内容をMasterのSECDRマシンの各レジスタに設定する。
+従って$\langle$list$\rangle$は長さ５のリストであるべきである。
+\end{nquote}
+\medskip
+\verb+(%reset-master%)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+Slaveのマシンがこれを評価すると、Masterのマシンの全てのレジスタを
+クリアする。すなわち \verb+(%list->master% '(()()()()()))+ と同等の結果を
+もたらす。ただし、Masterのマシンがこれを評価した場合は何も行うこと
+なくこれを無視する。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}マクロ{]}]~
+\end{description}
+\verb+(macro+ $\langle$keyword$\rangle$ $\langle$transformer$\rangle$\verb+)+\hspace*{\fill} macro special form
+\begin{nquote}{4ex}
+\par
+マクロスペシャルフォームのキーワードとして$\langle$keyword$\rangle$を定義する。
+$\langle$transformer$\rangle$は、マクロスペシャルフォーム全体を受け取って、それを
+展開し、置き換えるべき式を返す一引数の手続きであるべきである。
+\end{nquote}
+\medskip
+\verb+extend-syntax+\hspace*{\fill} macro special form
+\begin{nquote}{4ex}
+\par
+extend.exampleファイルを参照のこと。
+
+$\langle$参考$\rangle$
+ jafferのslibに含まれるマクロを用いたもの(fluidlet.scm, yasos.scm, 
+ collect.scm)では、マクロは決まった使われ方しかされていないので、
+ このextend-syntaxを用いて、次の要領で書き換えればSECDR-Schemeのマ
+ クロで実行できる。その決まった使われ方とは、
+\begin{verbatim}
+    (define-syntax INSTANCE-DISPATCHER
+      (syntax-rules ()
+        ((instance-dispatcher inst)
+         (cdr inst))))
+\end{verbatim}
+ といったように、\\
+
+\verb+    (define-syntax+ $\langle$NAME$\rangle$\verb+ +\\
+\verb+      (syntax-rules ()+ $\langle$BODY$\rangle$\verb+))+\\
+
+ の形態をしているので、これを\\
+
+\verb+    (extend-syntax (+$\langle$NAME$\rangle$\verb+)+\\
+\verb+      +$\langle$BODY$\rangle$\verb+)+\\
+
+ のように書き換える。
+
+ 例えば上の例は
+\begin{verbatim}
+    (extend-syntax (INSTANCE-DISPATCHER)
+      ((instance-dispatcher inst)
+       (cdr inst)))
+\end{verbatim}
+とすれば良い。
+\end{nquote}
+\medskip
+\verb+syntax-match?+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+\verb+extend-syntax+が用いるprocedureである。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}大域変数定義{]}]~
+\end{description}
+\verb+global-define+\hspace*{\fill} special form
+\begin{nquote}{4ex}
+\par
+\verb+define+と同様であるが、常にトップレベルで評価されたと同じ効果を持つ。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}ガーベジコレクション{]}]~
+\end{description}
+\verb+(gc)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+強制的にガーベジコレクションを実行させる。
+\end{nquote}
+\medskip
+\verb+(gc-verbose-off)+\hspace*{\fill} procedure\\
+\verb+(gc-verbose-on)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+ガーベジコレクションの実行を標準出力に表示するか否かの指定をする。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}新しいシンボル作成{]}]~
+\end{description}
+\verb+(gensym)+\hspace*{\fill} procedure\\
+\verb+(make-temp-symbol)+\hspace*{\fill} procedure\\
+\verb+(gensym+ $\langle$string$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(make-temp-symbol+ $\langle$string$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+新しいシンボルを生成し、それを返す。
+$\langle$string$\rangle$の指定の有る無しによって次のようになる。
+\begin{verbatim}
+  (gensym)-->     G123
+  (gensym "temp") -->     temp123
+\end{verbatim}
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}属性リスト{]}]~
+\end{description}
+\verb+(get+ $\langle$symbol$\rangle$ $\langle$attribute$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(put+ $\langle$symbol$\rangle$ $\langle$attribute$\rangle$ $\langle$value$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$symbol$\rangle$の属性リストに対する操作を行なう。
+\verb+put+は\verb+#v+を返し、\verb+get+は指定された属性値を返す。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}システム関係{]}]~
+\end{description}
+\verb+(quit)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+SECDR-Schemeの実行を終了する。
+\end{nquote}
+\medskip
+\verb+(new-segment+ $\langle$n$\rangle$)\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+ヒープ領域を広げる。$\langle$n$\rangle$は広げたいセグメントの数で、正の整数である
+べきである。（１セグメントの大きさはシステムによる。）
+実際に拡張できたセグメント数をメッセージ出力する。
+\verb+#v+を返す。
+\end{nquote}
+\medskip
+\verb+(system+ $\langle$string$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$string$\rangle$の内容をホスト環境に渡し、コマンドプロセッサに実行させる。
+その結果の値を返す。
+\end{nquote}
+\medskip
+\verb+(pwd)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+カレントディレクトリのフルパス名をstringとして返す。
+\end{nquote}
+\medskip
+\verb+(cd)+\hspace*{\fill} procedure\\
+\verb+(cd+ $\langle$pathname$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$pathname$\rangle$を省略すると、カレントディレクトリをホームディレクトリに
+設定する。
+$\langle$pathname$\rangle$はstringであるべきである。
+指定されたパスへカレントディレクトリを変更する。
+成功すると\verb+#t+、失敗ならば\verb+#f+を返す。
+\end{nquote}
+\medskip
+\verb+(chdir+ $\langle$pathname$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$pathname$\rangle$はstringであるべきである。
+指定されたパスへカレントディレクトリを変更する。
+成功すると\verb+#t+、失敗ならば\verb+#f+を返す。
+\end{nquote}
+\medskip
+\verb+(getenv+ $\langle$name$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$name$\rangle$はstringであるべきである。
+名前が$\langle$name$\rangle$に等しいシステムの環境変数の値をstringとして返す。
+もしもそのような環境変数が定義されていない場合は\verb+#f+を返す。
+\end{nquote}
+\medskip
+\verb+(software-type)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+実行している環境がunix上であれば\verb+unix+, Macintosh上であれば\verb+macos+, 
+MS-DOS上であれば\verb+msdos+を返す。
+\end{nquote}
+\medskip
+\verb+(ls)+\hspace*{\fill} procedure\\
+\verb+(ls+ $\langle$string$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+shellに ls $\langle$string$\rangle$ を実行させる。
+\end{nquote}
+\medskip
+\verb+(rm+ $\langle$filename$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+shellに rm $\langle$filename$\rangle$ を実行させる。
+\end{nquote}
+\medskip
+\verb+(ed)+\hspace*{\fill} procedure\\
+\verb+(ed+ $\langle$filename$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+エディタを起動する。
+\end{nquote}
+\medskip
+\verb+my-ls+\hspace*{\fill} variable\\
+\verb+my-rm+\hspace*{\fill} variable\\
+\verb+my-editor+\hspace*{\fill} variable
+\begin{nquote}{4ex}
+\par
+ls, rm, ed で実行したいシステムのコマンド名（＋オプション）を
+文字列としてこれらの変数に定義する。再定義可能。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}TIME{]}]~
+\end{description}
+\verb+(get-internal-time-units)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+\verb+CLOCK_PER_SEC+の値をintegerとして返す。
+\end{nquote}
+\medskip
+\verb+(get-internal-run-time)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+実行時間のCLOCK単位の値をintegerとして返す。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}トレース{]}]~
+\end{description}
+\verb+(trace+ $\langle$sym1$\rangle$ $\langle$sym2$\rangle$ ...\verb+)+\hspace*{\fill} procedure\\
+\verb+(untrace+ $\langle$sym1$\rangle$ $\langle$sym2$\rangle$ ...\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$sym1$\rangle$, $\langle$sym2$\rangle$, ... に対しトレースの設定、あるいは解除を行なう。
+\end{nquote}
+\medskip
+\verb+set-trace+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+\verb+trace+が用いるprocedureである。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}制御{]}]~
+\end{description}
+\verb+(sequence+ $\langle$expr$\rangle$\verb+)+\hspace*{\fill} macro special form
+\begin{nquote}{4ex}
+\par
+以下のように定義されている。
+\begin{verbatim}
+    (macro sequence (lambda (expr)
+      `((lambda () ,@(cdr expr))) ))
+\end{verbatim}
+注意するべきことは、\verb+begin+とは異なり、$\langle$expr$\rangle$内のdefine文を特別扱い
+しないということである。
+\end{nquote}
+\medskip
+\verb+while+\hspace*{\fill} macro special form\\
+\verb+when+\hspace*{\fill} macro special form\\
+\verb+unless+\hspace*{\fill} macro special form
+\begin{nquote}{4ex}
+\par
+各々以下のように定義されている。
+\begin{verbatim}
+ (macro while (lambda (while-macro)
+   (apply 
+    (lambda (pred . body)
+      (let ((while-loop (gensym))
+            (while-res (gensym)))
+        `(letrec ((,while-loop
+            (lambda (,while-res)
+              (if ,pred
+                  (,while-loop
+                   (begin ,@body))
+                  ,while-res))))
+           (,while-loop #f))))
+    (cdr while-macro))))
+
+ (macro when
+   (lambda (args)
+     `(if ,(cadr args)
+           (begin ,@(cddr args))
+           #f)))
+
+ (macro unless
+   (lambda (args)
+     `(if ,(cadr args)
+          #t
+          (begin ,@(cddr args)))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\verb+(rec+ $\langle$var$\rangle$ $\langle$expr$\rangle$\verb+)+\hspace*{\fill} macro special form
+\begin{nquote}{4ex}
+\par
+\verb+(letrec ((+$\langle$var$\rangle$ $\langle$expr$\rangle$\verb+))+ $\langle$var$\rangle$\verb+)+に等価である。\verb+rec+は以下の例に示す
+ように、self-recursive procedureの定義に便利である。
+
+\begin{verbatim}
+  ((rec loop
+    (lambda (n l)
+      (if (zero? n)
+          l
+          (loop (- n 1)(cons n l)))))
+   6 '())          --> (1 2 3 4 5 6)
+\end{verbatim}
+
+以下のように定義されている。
+\begin{verbatim}
+ (macro rec (lambda (rec-macro)
+   (apply
+    (lambda (proc body)
+      `(letrec ((,proc ,body)) ,proc))
+    (cdr rec-macro))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\verb+andmap+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+以下のように定義されている。
+\begin{verbatim}
+ (define (andmap p . args)
+   ;; use "first-finish" rule
+   (let andmap ((args args) (value #t))
+     (if
+      (let any-at-end? ((ls args))
+        (and (pair? ls)
+             (or (not (pair? (car ls)))
+                 (any-at-end? (cdr ls)))))
+      value
+      (let ((value
+               (apply p (map car args))))
+        (and value
+             (andmap (map cdr args)
+                     value))))))
+\end{verbatim}
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}述語{]}]~
+\end{description}
+\verb+(file-exists?+ $\langle$file-name$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$file-name$\rangle$はstringであるべきである。$\langle$file-name$\rangle$に指定された名前に
+一致するファイルが既に存在している場合は\verb+#t+を、そうでなければ\verb+#f+を返す。
+\end{nquote}
+\medskip
+\verb+every?+\hspace*{\fill} procedure\\
+\verb+some?+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+各々以下のように定義されている。
+\begin{verbatim}
+  (define (every? proc plist)
+    (cond
+     ((null? plist) #t)
+     ((proc (car plist))
+      (every? proc (cdr plist)))
+     (else #f)))
+
+  (define (some? proc plist)
+    (cond
+     ((null? plist) #f)
+     ((proc (car plist)) #t)
+     (else (some? proc (cdr plist)))))
+\end{verbatim}
+\end{nquote}
+\medskip
+\verb+(atom?+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(closure?+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(continuation?+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(primitive-procedure?+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(proper-rational?+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(proper-real?+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure\\
+\verb+(promise?+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+        $\langle$obj$\rangle$が各々のtypeであるとき\verb+#t+、そうでなければ\verb+#f+を返す。
+\end{nquote}
+\medskip
+\verb+(set-promise+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+\verb+(promise?+ $\langle$obj$\rangle$\verb+)+が\verb+#t+を返すようにする。\verb+delay+で用いている。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}型変換{]}]~
+\end{description}
+\verb+char->string+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+以下のように定義されている。
+\begin{verbatim}
+  (define (char->string c)
+    (string-set! "@" 0 c))
+\end{verbatim}
+\end{nquote}
+\medskip
+
+
+\begin{description}
+\item[{[}ボックス型{]}]~
+\end{description}
+\verb+(box)+\hspace*{\fill} procedure\\
+\verb+(box+ $\langle$object$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$object$\rangle$を持つboxを返す。
+ボックス型の差したてマクロ文字が標準で用意されている。それは\verb+#&+で、
+\verb+(box+ $\langle$object$\rangle$\verb+)+は\verb+#&(+$\langle$object$\rangle$\verb+)+と記述しても良い。
+\end{nquote}
+\medskip
+\verb+(unbox+ $\langle$box-object$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$box-object$\rangle$はboxでなければならない。$\langle$box-object$\rangle$の中のobjectを
+取り出し、それを返す。
+\end{nquote}
+\medskip
+\verb+(box?+ $\langle$object$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$object$\rangle$がboxであるときは\verb+#t+、そうでないときは\verb+#f+を返す。
+\end{nquote}
+\medskip
+\verb+(set-box!+ $\langle$box-object$\rangle$ $\langle$object$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$box-object$\rangle$はboxでなければならない。$\langle$box-object$\rangle$の中を$\langle$object$\rangle$で
+置き換える。
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}ストリーム{]}]~
+\end{description}
+\verb+cons-stream+\hspace*{\fill} macro special form\\
+\verb+head+\hspace*{\fill} procedure\\
+\verb+tail+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+各々以下のように定義されている。
+\begin{verbatim}
+ (macro cons-stream (lambda (l)
+   `(cons ,(cadr l) (delay ,(caddr l)))))
+
+ (define (head stream)(car stream))
+
+ (define (tail stream)(force (cdr stream)))
+\end{verbatim}
+\end{nquote}
+\medskip
+
+\begin{description}
+\item[{[}入出力{]}]~
+\end{description}
+\verb+(spaces+ $\langle$num$\rangle$ $\langle$outport$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$num$\rangle$で指定された数のスペースを$\langle$outport$\rangle$に出力する。
+\end{nquote}
+\medskip
+\verb+(print-list+ $\langle$mode$\rangle$ $\langle$list$\rangle$ $\langle$outport$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$list$\rangle$を$\langle$outport$\rangle$に出力する。$\langle$mode$\rangle$に0が指定されると、
+$\langle$list$\rangle$の各要素は\verb+display+で出力されたようになり、
+その他の値が指定されると、各要素は\verb+write+で出力されたようになる。
+\end{nquote}
+\medskip
+\verb+pretty-print+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+簡易版pretty-print
+\end{nquote}
+\medskip
+\verb+prompt-read+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+以下のように定義されている。
+\begin{verbatim}
+  (define (prompt-read prompt)
+    (display prompt) (read))
+\end{verbatim}
+\end{nquote}
+\medskip
+\verb+printf+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+C言語のprintfに似たもの
+\end{nquote}
+\medskip
+\verb+%format%+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+簡易版format
+\end{nquote}
+\medskip
+\verb+(uniq-print+ $\langle$term$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$term$\rangle$に循環listまたはvectorが含まれる場合は、それにラベルをつけて
+pretty-print形式で表示する。
+\end{nquote}
+\medskip
+\verb+(uniq-write+ $\langle$term$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$term$\rangle$に循環listまたはvectorが含まれる場合は、それにラベルをつけて
+表示する。
+\end{nquote}
+\medskip
+\verb+(uniq-read)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+循環listまたはvectorのラベルによる表現形式を正しく読みとる。
+\end{nquote}
+\medskip
+\verb+(u-conv+ $\langle$term$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$term$\rangle$に循環listまたはvectorが含まれる場合は、$\langle$term$\rangle$をラベルによる
+表現に破壊的に変換し、その値を返す。\\
+(注: 元の値に戻すためにはこの返す値を必ずとっておく必要がある。
+     すなわち返す値と$\langle$term$\rangle$は異なる。)
+\end{nquote}
+\medskip
+\verb+(uu-conv+ $\langle$term$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+循環listまたはvectorのラベルによる表現形式を含む$\langle$term$\rangle$を元の状態に
+破壊的に戻し、その値を返す。\\
+(注: $\langle$term$\rangle$自身を元の値に戻すためには、この返す値を必ず設定し直す
+必要がある。)
+\end{nquote}
+\par
+注) 蛇足ながら\verb+(uu-conv (u-conv+ $\langle$term$\rangle$\verb+))+はもちろん正しく$\langle$term$\rangle$を元に戻す。
+\medskip
+
+\begin{description}
+\item[{[}R2RS{]}]~
+\end{description}
+\verb|-1+|\hspace*{\fill} procedure\\
+\verb|1+|\hspace*{\fill} procedure\\
+
+\begin{description}
+\item[{[}その他{]}]~
+\end{description}
+\verb+simplest-rational+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+\verb+rationalize+が用いるprocedureである。
+\end{nquote}
+\medskip
+\verb+(list-width+ $\langle$obj$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$obj$\rangle$の印字形式が何文字(byte)になるかを返す。
+\end{nquote}
+\medskip
+\verb+(qsort+ $\langle$seq$\rangle$ $\langle$pre$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$pre$\rangle$は比較のための述語、$\langle$seq$\rangle$はlistまたはvectorであるべきである。
+クイックソートによって並べ換えた値を返す。
+\end{nquote}
+\medskip
+\verb+(qsort!+ $\langle$seq$\rangle$ $\langle$pre$\rangle$\verb+)+\hspace*{\fill} procedure
+\begin{nquote}{4ex}
+\par
+$\langle$pre$\rangle$は比較のための述語、$\langle$seq$\rangle$はvectorであるべきである。
+クイックソートによって$\langle$seq$\rangle$で与えられたvectorの要素を並べ換える。
+そしてその値を返す。(副作用を期待する場合に用いる。)
+\end{nquote}
+\medskip
+\par
+------------------------------------------------------------\\
+\medskip

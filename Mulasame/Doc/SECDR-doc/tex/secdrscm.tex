@@ -1,0 +1,106 @@
+\documentstyle[twoside, jtwocolumn]{jarticle}
+\setcounter{secnumdepth}{6}
+\setcounter{tocdepth}{6}
+\topsep=0.1cm
+\parsep=0.1cm
+\itemsep=0.0cm
+\setlength{\oddsidemargin}{0mm}
+\setlength{\evensidemargin}{0mm}
+\newenvironment{nquote}[1]%
+{\list{}{\leftmargin=#1}\item[]}%
+{\endlist}
+
+\begin{document}
+\title{
+SECDR-Scheme\\
+}
+\author{
+林　祥一\\
+s-haya@rst.fujixerox.co.jp
+}
+\date{平成5年7月6日
+}
+\maketitle
+
+\begin{abstract}
+\par
+SECDR-Schemeでは、Schemeのプログラムは仮想マシンの機械語にコンパイルされ
+てから、仮想マシンによって実行が行なわれます。SECDR-Schemeの仮想マシンは、そ
+の名前からも容易に想像できますように、SECDマシンの変形の一つです。
+\medskip
+\par
+つまり本処理系は、操作的意味を与えるために考案された抽象
+機械がそのまま動いているようなものです。そしてその抽象機械のわかり易さを
+優先したために、実行速度に関しては特別な配慮を行なっていません。ですから
+速度については、はっきりいって速くはない処理系です。
+\medskip
+\par
+しかし、Scheme言語についても充分な学習や実験が行えるように、R4RS\cite{bib:Revised}の仕様に準拠
+した処理系になっています。具体的には、R4RSを満たしていれば利用できるjafferの
+ライブラリslib, 数式処理システムjacalが問題なく動きます。(slibに含まれるオブ
+ジェクト指向システムyasosも利用できます。) emacs上で利用可能なソースレベルデ
+バッガpsdもSECDR-Scheme特有のマクロを含まなければ利用できることを確認してい
+ます。その他、動作することを確認しているものについてはREADMEを参照して下さい。
+\medskip
+\par
+また、もともとR4RS対応ではなかったために、多少移植の手間を要したもの等に関し
+ては附属のライブラリとしてsecdrlibの下に添付してあります。この中にはschelog
+というSchemeで書かれたPrologや、tiny-clos, meroon, methodsといったオブジェク
+ト指向ライブラリ, 疑似並列処理を実現するpcall, モジュール管理のためのmodule
+等が含まれています。またsecdrlibの下には、独自に作成した非決定性のオペレータ
+ambのライブラリも添付してあります。これはHendersonの著書による方法とはやや異
+なり、call/ccによって実現されています。
+\medskip
+\par
+本稿では、はじめにこのSECDR-SchemeのR4RSに対して拡張されている部分について
+説明します。次にSECDR-Schemeの仮想マシンであるSECDマシンについて簡単に説明
+します。
+\medskip
+\par
+付録には、添付したambライブラリの説明等の継続に関する内容をまとめてあります。
+付録\ref{sec:ISWIMtoIS}は、以前にGriffin\cite{bib:Griffin}の日本語訳をした
+ことがありましたので、その中から関係する部分を抜粋\footnote{抜粋した部分の
+内容からすれば、本来はFelleisenの文献から引用するべきなのですが。}しただけ
+のものです。
+\end{abstract}
+\bigskip
+\tableofcontents
+\newpage
+
+\newtheorem{定理}{{\bf 定理}}[section]
+\newtheorem{定義}{{\bf 定義}}[section]
+\newtheorem{例}{{\bf 例}}[section]
+
+\newcommand{\JLaTeX}{\leavevmode\lower.5ex\hbox{\rm J}\kern-.1em\LaTeX}
+\newcommand{\betareduct}{\rightarrow _{\beta {\it v}}}
+\newcommand{\betaorigreduct}{\rightarrow _{\beta}}
+\newcommand{\abortreduct}{\rightarrow _{\cal A}}
+\newcommand{\controlreduct}{\rightarrow _{\cal C}}
+\newcommand{\callccreduct}{\rightarrow _{\cal K}}
+\newcommand{\unionreduct}{\rightarrow _{\it u}}
+\newcommand{\typedreduct}{\rightarrow _{\it t}}
+\newcommand{\typedbetareduct}{\rightarrow_{\it t\beta v}}
+\newcommand{\typedcontrolreduct}{\rightarrow_{\it t\control}}
+\newcommand{\controleliminationreduct}{\rightarrow_{\control \it e}}
+\newcommand{\pireduct}{\rightarrow_{\pi i}}
+
+\newcommand{\abort}{{\cal A}}
+\newcommand{\control}{{\cal C}}
+\newcommand{\callcc}{{\cal K}}
+\newcommand{\case}{{\bf case}}
+\newcommand{\inj}{{\bf inj}}
+\newcommand{\evalv}{eval_{\it v}}
+\def\eval{$eval_{\it v}$}
+\def\betav{$\beta _{\it v}$}
+
+\input manual.tex
+\input machine.tex
+
+\newpage
+\appendix
+\input scm-cont.tex
+\input no-macro.tex
+\input idea-scm.tex
+\newpage
+\input referenc.tex
+\end{document}

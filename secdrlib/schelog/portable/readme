@@ -1,0 +1,70 @@
+;readme
+;dorai@cs.rice.edu
+
+The file schelog.scm requires three non- (or semi-)
+R4RS features, viz., append!, reverse! and
+define-syntax.
+
+Using Schelog with SLIB
+***********************
+
+If you use SLIB, the standard Scheme library maintained
+by Aubrey Jaffer, simply specify #t as the value of the
+boolean variable schelog:using-slib? in schelog.scm and
+appropriate features are loaded from SLIB.
+
+OPTIONAL: If you'd like to associate a feature name
+with Schelog:
+
+1. Copy schelog.scm to your SLIB directory
+
+2. Add a feature 'schelog to the definition of
+*catalog* in require.scm that loads schelog.scm.  To do
+this, add the line
+
+  (schelog defmacro  .  "schelog")
+
+amidst similar lines in require.scm
+
+3.  Schelog may now be loaded either by loading
+schelog.scm or by typing
+
+  (require 'schelog)
+
+at your Scheme prompt.
+
+SLIB users don't need to read the rest of this file.
+
+Using Schelog without SLIB
+**************************
+
+If you don't use SLIB, you need to pre-load some
+definitions before you can use Schelog.  These may be
+done via an init file.  First, make sure that the value
+of schelog:using-slib? is #f in schelog.scm.
+
+R4RS implementations of append! and reverse! are
+provided in appendb.scm and reverseb.scm respectively.
+
+Schelog doesn't require the full power of R4RS "macro
+by example" define-syntax.  Only global definitions of
+the high-level kind are needed.  An implementation of
+such a define-syntax in terms of defmacro is provided
+in mbe.scm (with the hygiene filter in hygiene.scm).
+
+Chez Scheme already has a macro-by-example facility
+called extend-syntax.  Its syntax differs from R4RS's
+define-syntax.  The file chezmbe.scm defines
+define-syntax in terms of extend-syntax.
+
+Note that mbe.scm expects defmacro.  A definition of
+defmacro for Aubrey Jaffer's SCM is provided in
+defmacro.scm (property lists used in this code are
+provided in proplist.scm).  Most Schemes have some form
+of macro facility comparable to defmacro.  Please sugar
+it appropriately to get defmacro, and then define
+define-syntax on top of it using mbe.scm.
+
+Collect all this in an init file (or add to an already
+existing init file) and then load schelog.scm to get
+Schelog.
